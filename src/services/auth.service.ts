@@ -7,7 +7,7 @@ export class AuthService {
   async login(email: string, pass: string) {
     let user = await prisma.user.findUnique({
       where: { email },
-      include: { role: true },
+      include: { role: true, company: true },
     });
 
     // Fallback search for demo portal email aliases (e.g. admin@apexpm.com, admin@apex.com, manager@apexpm.com)
@@ -19,12 +19,18 @@ export class AuthService {
             { email: 'admin@apexpm.com' },
           ],
         },
-        include: { role: true },
+        include: { role: true, company: true },
       });
     }
 
     if (!user) {
       throw new AppError('Invalid credentials provided.', 401, 'INVALID_CREDENTIALS');
+    }
+
+    if (user.companyId && user.company) {
+      if (user.company.status !== 'Active') {
+        throw new AppError('Your company account is suspended. Please contact support.', 403, 'COMPANY_SUSPENDED');
+      }
     }
 
     // Accept demo passwords (password123, admin123, password) or bcrypt hash comparison
