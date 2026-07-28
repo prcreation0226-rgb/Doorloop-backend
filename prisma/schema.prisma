@@ -254,6 +254,7 @@ model Tenant {
   invoices          Invoice[]
   charges           Charge[]
   deposits          Deposit[]
+  imageUrl          String?      @db.Text
 
   @@map("tenants")
 }
