@@ -559,13 +559,21 @@ model PaymentPlan {
 }
 
 model CrmLead {
-  id        String   @id @default(uuid())
-  name      String
-  email     String
-  phone     String
-  source    String
-  status    String   @default("New")
-  createdAt DateTime @default(now())
+  id                   String   @id @default(uuid())
+  firstName            String
+  lastName             String
+  email                String
+  phone                String
+  propertyOfInterestId String?
+  propertyName         String?
+  budget               Float?
+  moveInDate           String?
+  source               String
+  priority             String   @default("Medium")
+  assignedAgent        String?
+  notes                String?  @db.Text
+  status               String   @default("New")
+  createdAt            DateTime @default(now())
 
   @@map("crm_leads")
 }
