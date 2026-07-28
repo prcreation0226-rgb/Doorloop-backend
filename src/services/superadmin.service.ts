@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt';
 import prisma from '../config/database';
 
 export class SuperAdminService {
@@ -22,9 +23,9 @@ export class SuperAdminService {
     });
   }
 
-  async createCompany(data: { name: string; code?: string; contactName: string; email: string; phone: string; planName?: string }) {
+  async createCompany(data: { name: string; code?: string; contactName: string; email: string; phone: string; planName?: string; password?: string }) {
     const code = data.code || data.name.substring(0, 4).toUpperCase();
-    return prisma.company.create({
+    const company = await prisma.company.create({
       data: {
         name: data.name,
         code,
@@ -36,6 +37,31 @@ export class SuperAdminService {
         status: 'Active',
       },
     });
+
+    // Create the matching login User for the company
+    const passwordHash = await bcrypt.hash(data.password || 'admin123', 12);
+    const superAdminRole = await prisma.role.findFirst({ where: { name: 'Super Admin' } });
+
+    const nameParts = data.contactName.trim().split(/\s+/);
+    const firstName = nameParts[0] || 'Admin';
+    const lastName = nameParts.slice(1).join(' ') || 'User';
+
+    if (superAdminRole) {
+      await prisma.user.create({
+        data: {
+          email: data.email,
+          passwordHash,
+          firstName,
+          lastName,
+          phone: data.phone,
+          roleId: superAdminRole.id,
+          companyId: company.id,
+          status: 'Active',
+        },
+      });
+    }
+
+    return company;
   }
 
   async updateCompany(id: string, data: any) {
