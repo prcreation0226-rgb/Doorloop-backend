@@ -1,0 +1,923 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// --- Enums ---
+enum PropertyType {
+  Apartment
+  Commercial
+  SingleFamily
+  MultiFamily
+  HOA
+}
+
+enum UnitStatus {
+  Occupied
+  Vacant
+  Reserved
+  UnderMaintenance
+}
+
+enum TenantStatus {
+  Active
+  Inactive
+  Pending
+}
+
+enum LeaseStatus {
+  Active
+  Pending
+  Expired
+  Terminated
+}
+
+enum PaymentStatus {
+  Pending
+  Paid
+  PartiallyPaid
+  Failed
+  Refunded
+  Voided
+}
+
+enum PaymentMethod {
+  ACH
+  CreditCard
+  BankTransfer
+  Cash
+  Check
+}
+
+enum WorkOrderStatus {
+  Open
+  Assigned
+  InProgress
+  Completed
+  Rejected
+  Cancelled
+  Closed
+}
+
+enum Priority {
+  Low
+  Normal
+  High
+  Emergency
+}
+
+// --- User & RBAC Models ---
+model User {
+  id           String           @id @default(uuid())
+  email        String           @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String?
+  roleId       String
+  role         Role             @relation(fields: [roleId], references: [id])
+  status       String           @default("Active")
+  lastLogin    DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  companyId    String?
+  company      Company?         @relation(fields: [companyId], references: [id])
+
+  assignments  UserAssignment[]
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  description String?      @db.Text
+  isCustom    Boolean      @default(false)
+  permissions Permission[]
+  users       User[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id         String   @id @default(uuid())
+  roleId     String
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module     String   // e.g. "Properties", "Leasing", "Accounting"
+  canView    Boolean  @default(false)
+  canCreate  Boolean  @default(false)
+  canEdit    Boolean  @default(false)
+  canDelete  Boolean  @default(false)
+  canApprove Boolean  @default(false)
+  canExport  Boolean  @default(false)
+
+  @@unique([roleId, module])
+  @@map("permissions")
+}
+
+model UserAssignment {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  propertyId String?
+  buildingId String?
+  unitId     String?
+
+  @@map("user_assignments")
+}
+
+// --- Real Estate Core Models ---
+model Owner {
+  id                   String              @id @default(uuid())
+  firstName            String
+  lastName             String
+  email                String              @unique
+  phone                String
+  streetAddress        String?
+  payoutMethod         String              @default("ACH/Direct Deposit")
+  propertiesOwnedCount Int                 @default(0)
+  createdAt            DateTime            @default(now())
+
+  companyId            String?
+  company              Company?            @relation(fields: [companyId], references: [id])
+
+  properties           Property[]
+  distributions        OwnerDistribution[]
+
+  @@map("owners")
+}
+
+model Property {
+  id                  String       @id @default(uuid())
+  name                String
+  type                PropertyType @default(Apartment)
+  status              String       @default("Active")
+  ownerId             String
+  owner               Owner        @relation(fields: [ownerId], references: [id])
+  ownershipPercentage Float        @default(100)
+  managementCompany   String       @default("Apex Property Management")
+  address             String
+  streetAddress       String
+  city                String
+  state               String
+  country             String       @default("USA")
+  zip                 String
+  unitsCount          Int          @default(0)
+  occupiedUnits       Int          @default(0)
+  occupancyRate       Float        @default(0)
+  monthlyRevenue      Float        @default(0)
+  yearBuilt           Int
+  totalBuildings      Int          @default(1)
+  squareFootage       Float
+  purchasePrice       Float
+  currentValue        Float
+  monthlyExpenses     Float        @default(0)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  companyId           String?
+  company             Company?     @relation(fields: [companyId], references: [id])
+
+  buildings           Building[]
+  units               Unit[]
+  leases              Lease[]
+  rentPayments        RentPayment[]
+  workOrders          WorkOrder[]
+
+  @@map("properties")
+}
+
+model Building {
+  id            String   @id @default(uuid())
+  propertyId    String
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name          String
+  floors        Int      @default(1)
+  unitsCount    Int      @default(0)
+  occupancyRate Float    @default(0)
+
+  units         Unit[]
+
+  @@map("buildings")
+}
+
+model Unit {
+  id               String     @id @default(uuid())
+  propertyId       String
+  property         Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  buildingId       String
+  building         Building   @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  unitNumber       String
+  floor            Int
+  bedrooms         Int
+  bathrooms        Float
+  squareFootage    Float
+  rentAmount       Float
+  securityDeposit  Float
+  availabilityDate DateTime
+  status           UnitStatus @default(Vacant)
+
+  tenants          Tenant[]
+  leases           Lease[]
+  rentPayments     RentPayment[]
+  violations       Violation[]
+
+  @@map("units")
+}
+
+model Tenant {
+  id        String       @id @default(uuid())
+  firstName String
+  lastName  String
+  email     String       @unique
+  phone     String
+  unitId    String?
+  unit      Unit?        @relation(fields: [unitId], references: [id])
+  status    TenantStatus @default(Pending)
+  createdAt DateTime     @default(now())
+
+  companyId String?
+  company   Company?     @relation(fields: [companyId], references: [id])
+
+  leases            Lease[]
+  payments          RentPayment[]
+  insurancePolicies InsurancePolicy[]
+  paymentPlans      PaymentPlan[]
+  screeningReports  ScreeningReport[]
+  invoices          Invoice[]
+  charges           Charge[]
+  deposits          Deposit[]
+
+  @@map("tenants")
+}
+
+model Lease {
+  id            String      @id @default(uuid())
+  tenantId      String
+  tenant        Tenant      @relation(fields: [tenantId], references: [id])
+  propertyId    String
+  property      Property    @relation(fields: [propertyId], references: [id])
+  unitId        String
+  unit          Unit        @relation(fields: [unitId], references: [id])
+  startDate     DateTime
+  endDate       DateTime
+  rentAmount    Float
+  depositAmount Float
+  status        LeaseStatus @default(Pending)
+
+  companyId     String?
+  company       Company?    @relation(fields: [companyId], references: [id])
+
+  payments RentPayment[]
+
+  @@map("leases")
+}
+
+// --- Billing & Accounting Models ---
+model RentPayment {
+  id              String        @id @default(uuid())
+  tenantId        String
+  tenant          Tenant        @relation(fields: [tenantId], references: [id])
+  propertyId      String
+  property        Property      @relation(fields: [propertyId], references: [id])
+  unitId          String
+  unit            Unit          @relation(fields: [unitId], references: [id])
+  leaseId         String
+  lease           Lease         @relation(fields: [leaseId], references: [id])
+  amount          Float
+  dueDate         DateTime
+  paidDate        DateTime?
+  status          PaymentStatus @default(Pending)
+  paymentMethod   PaymentMethod @default(ACH)
+  referenceNumber String?
+  createdBy       String        @default("System")
+
+  companyId       String?
+  company         Company?      @relation(fields: [companyId], references: [id])
+
+  @@map("rent_payments")
+}
+
+model CoAAccount {
+  id          String   @id @default(uuid())
+  accountCode String   @unique
+  accountName String
+  type        String   // Asset, Liability, Equity, Revenue, Expense
+  subType     String?
+  balance     Float    @default(0)
+  isActive    Boolean  @default(true)
+
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id])
+
+  journalLines JournalEntryLine[]
+
+  @@map("coa_accounts")
+}
+
+model JournalEntry {
+  id          String             @id @default(uuid())
+  entryNumber String             @unique
+  date        DateTime
+  description String             @db.Text
+  reference   String?
+  lines       JournalEntryLine[]
+
+  companyId   String?
+  company     Company?           @relation(fields: [companyId], references: [id])
+
+  @@map("journal_entries")
+}
+
+model JournalEntryLine {
+  id             String       @id @default(uuid())
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        CoAAccount   @relation(fields: [accountId], references: [id])
+  debit          Float        @default(0)
+  credit         Float        @default(0)
+
+  @@map("journal_entry_lines")
+}
+
+// --- Maintenance & Operations Models ---
+model Vendor {
+  id          String      @id @default(uuid())
+  companyName String
+  contactName String
+  email       String
+  phone       String
+  serviceType String
+  rating      Float       @default(5.0)
+
+  companyId   String?
+  company     Company?    @relation(fields: [companyId], references: [id])
+
+  workOrders  WorkOrder[]
+
+  @@map("vendors")
+}
+
+model WorkOrder {
+  id              String          @id @default(uuid())
+  propertyId      String
+  property        Property        @relation(fields: [propertyId], references: [id])
+  title           String
+  description     String          @db.Text
+  vendorId        String?
+  vendor          Vendor?         @relation(fields: [vendorId], references: [id])
+  priority        Priority        @default(Normal)
+  status          WorkOrderStatus @default(Open)
+  estimatedCost   Float?
+  actualCost      Float?
+  rejectReason    String?         @db.Text
+  resolutionNotes String?         @db.Text
+  createdAt       DateTime        @default(now())
+
+  companyId       String?
+  company         Company?        @relation(fields: [companyId], references: [id])
+
+  @@map("work_orders")
+}
+
+model OwnerDistribution {
+  id            String   @id @default(uuid())
+  ownerId       String
+  owner         Owner    @relation(fields: [ownerId], references: [id])
+  period        String
+  amount        Float
+  status        String   @default("Completed")
+  processedDate DateTime @default(now())
+
+  @@map("owner_distributions")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  module    String
+  object    String
+  ip        String
+  status    String   @default("Success")
+
+  @@map("audit_logs")
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   @db.Text
+  category  String   @default("General")
+  author    String   @default("Property Management")
+  isPinned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  @@map("announcements")
+}
+
+model InsurancePolicy {
+  id             String   @id @default(uuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  policyNumber   String
+  provider       String
+  coverageAmount Float
+  startDate      DateTime
+  endDate        DateTime
+  status         String   @default("Active")
+  createdAt      DateTime @default(now())
+
+  companyId      String?
+  company        Company? @relation(fields: [companyId], references: [id])
+
+  @@map("insurance_policies")
+}
+
+model Promotion {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  discount  String
+  duration  String
+  used      Int      @default(0)
+  maxUses   Int      @default(100)
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  @@map("promotions")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String?
+  title     String
+  message   String   @db.Text
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  @@map("notifications")
+}
+
+model Document {
+  id         String   @id @default(uuid())
+  name       String
+  category   String   @default("General")
+  fileUrl    String
+  fileSize   String   @default("1.2 MB")
+  uploadedBy String   @default("Property Manager")
+  createdAt  DateTime @default(now())
+
+  companyId  String?
+  company    Company? @relation(fields: [companyId], references: [id])
+
+  @@map("documents")
+}
+
+model AiChatLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  prompt    String   @db.Text
+  response  String   @db.Text
+  createdAt DateTime @default(now())
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  @@map("ai_chat_logs")
+}
+
+model BankAccount {
+  id            String   @id @default(uuid())
+  name          String
+  institution   String
+  accountNumber String
+  balance       Float    @default(0.0)
+  type          String
+  status        String   @default("Active")
+  createdAt     DateTime @default(now())
+
+  companyId     String?
+  company       Company? @relation(fields: [companyId], references: [id])
+
+  @@map("bank_accounts")
+}
+
+model SubscriptionPlan {
+  id           String   @id @default(uuid())
+  planName     String
+  price        Float
+  billingCycle String
+  nextInvoice  DateTime
+  usageLimit   String
+  createdAt    DateTime @default(now())
+
+  @@map("subscription_plans")
+}
+
+model SecurityPolicy {
+  id             String   @id @default(uuid())
+  mfaRequired    Boolean  @default(true)
+  sessionTimeout Int      @default(30)
+  passwordPolicy String   @default("Strong")
+  ipWhitelist    String   @default("192.168.1.0/24")
+
+  @@map("security_policies")
+}
+
+model PaymentPlan {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  totalAmount Float
+  frequency   String
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+
+  @@map("payment_plans")
+}
+
+model CrmLead {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  phone     String
+  source    String
+  status    String   @default("New")
+  createdAt DateTime @default(now())
+
+  @@map("crm_leads")
+}
+
+model ScreeningReport {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  creditScore  Int
+  criminalPass Boolean  @default(true)
+  evictionPass Boolean  @default(true)
+  status       String   @default("Approved")
+  createdAt    DateTime @default(now())
+
+  companyId    String?
+  company      Company?         @relation(fields: [companyId], references: [id])
+
+  @@map("screening_reports")
+}
+
+model Violation {
+  id          String   @id @default(uuid())
+  unitId      String
+  unit        Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @db.Text
+  fineAmount  Float    @default(0.0)
+  status      String   @default("Open")
+  createdAt   DateTime @default(now())
+
+  companyId  String?
+  company    Company? @relation(fields: [companyId], references: [id])
+
+  @@map("violations")
+}
+
+model Application {
+  id            String   @id @default(uuid())
+  tenantName    String
+  email         String
+  propertyName  String
+  unitNumber    String
+  status        String   @default("Pending")
+  submittedDate DateTime @default(now())
+  rentProposed  Float
+  createdAt     DateTime @default(now())
+
+  companyId     String?
+  company       Company? @relation(fields: [companyId], references: [id])
+
+  @@map("applications")
+}
+
+model Invoice {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  tenantName   String
+  propertyId   String
+  propertyName String
+  unitNumber   String   @default("")
+  dueDate      String
+  amount       Float
+  paidAmount   Float    @default(0)
+  balance      Float
+  status       String   @default("Draft")
+  lineItems    String   @db.Text @default("[]")
+  notes        String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  companyId    String?
+  company      Company?  @relation(fields: [companyId], references: [id])
+
+  @@map("invoices")
+}
+
+model ServiceRequest {
+  id                 String   @id @default(uuid())
+  title              String
+  description        String   @db.Text
+  propertyId         String
+  propertyName       String
+  unitNumber         String   @default("")
+  tenantId           String?
+  tenantName         String
+  priority           String   @default("Normal")
+  status             String   @default("New")
+  category           String   @default("General")
+  assignedVendorId   String?
+  assignedVendorName String?
+  assignedTechnician String?
+  estimatedCost      Float?
+  cost               Float?
+  scheduledDate      String?
+  notes              String?  @db.Text
+  messages           String   @db.Text @default("[]")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  companyId          String?
+  company            Company?  @relation(fields: [companyId], references: [id])
+
+  @@map("service_requests")
+}
+
+model Company {
+  id          String        @id @default(uuid())
+  name        String
+  code        String        @unique
+  contactName String
+  email       String        @unique
+  phone       String
+  planName    String        @default("Pro Plan")
+  storageUsed String        @default("1.2 GB")
+  status      String        @default("Active")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  users             CompanyUser[]
+  invoices          SaaSInvoice[]
+  portalUsers       User[]
+  properties        Property[]
+  owners            Owner[]
+  tenants           Tenant[]
+  leases            Lease[]
+  workOrders        WorkOrder[]
+  payments          RentPayment[]
+  reports           ScreeningReport[]
+  invoicesPm        Invoice[]
+  serviceReqs       ServiceRequest[]
+  violations        Violation[]
+  staff             StaffProfile[]
+  applications      Application[]
+  coaAccounts       CoAAccount[]
+  journalEntries    JournalEntry[]
+  vendors           Vendor[]
+  bankAccounts      BankAccount[]
+  announcements     Announcement[]
+  insurancePolicies InsurancePolicy[]
+  promotions        Promotion[]
+  notifications     Notification[]
+  documents         Document[]
+  aiChatLogs        AiChatLog[]
+
+  @@map("companies")
+}
+
+model CompanyUser {
+  id        String   @id @default(uuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  email     String   @unique
+  role      String   @default("Admin")
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+
+  @@map("company_users")
+}
+
+model SaaSPlan {
+  id            String   @id @default(uuid())
+  name          String   @unique
+  price         Float
+  billingCycle  String   @default("Monthly")
+  maxProperties Int      @default(50)
+  maxUnits      Int      @default(500)
+  features      String   @db.Text
+  createdAt     DateTime @default(now())
+
+  @@map("saas_plans")
+}
+
+model SaaSInvoice {
+  id          String    @id @default(uuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyName String
+  amount      Float
+  status      String    @default("Paid")
+  dueDate     DateTime
+  paidDate    DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("saas_invoices")
+}
+
+model PlatformSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_settings")
+}
+
+model OwnerDocument {
+  id         String   @id @default(uuid())
+  name       String
+  category   String   @default("Statements")
+  size       String   @default("1.2 MB")
+  uploadedAt DateTime @default(now())
+  fileUrl    String?
+
+  @@map("owner_documents")
+}
+
+model OwnerMessage {
+  id        String   @id @default(uuid())
+  sender    String
+  recipient String
+  subject   String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@map("owner_messages")
+}
+
+model TenantDocument {
+  id         String   @id @default(uuid())
+  name       String
+  category   String   @default("Leasing")
+  size       String   @default("1.5 MB")
+  uploadedAt DateTime @default(now())
+  fileUrl    String?
+
+  @@map("tenant_documents")
+}
+
+model TenantMessage {
+  id        String   @id @default(uuid())
+  sender    String
+  recipient String
+  subject   String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@map("tenant_messages")
+}
+
+model TenantNotification {
+  id        String   @id @default(uuid())
+  title     String
+  message   String   @db.Text
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("tenant_notifications")
+}
+
+model StaffProfile {
+  id                 String   @id @default(uuid())
+  name               String   @default("Marcus Vance")
+  specialist         String   @default("Senior Maintenance Lead")
+  email              String   @unique @default("marcus.vance@apexpm.com")
+  phone              String   @default("(512) 555-0199")
+  role               String   @default("Maintenance Staff")
+  assignedProperties String   @default("Sunset Villas, Apex Heights, Lakeside")
+  joinedDate         String   @default("January 15th, 2025")
+  isAvailable        Boolean  @default(true)
+  completedJobs      Int      @default(142)
+  avgResponseTime    String   @default("38 Min")
+  customerRating     String   @default("4.92 / 5.0")
+  createdAt          DateTime @default(now())
+
+  companyId          String?
+  company            Company?     @relation(fields: [companyId], references: [id])
+
+  @@map("staff_profiles")
+}
+
+model Charge {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  title     String
+  amount    Float
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+
+  @@map("charges")
+}
+
+model Deposit {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  amount    Float
+  status    String   @default("Held")
+  createdAt DateTime @default(now())
+
+  @@map("deposits")
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  category    String
+  amount      Float
+  date        DateTime @default(now())
+  description String   @db.Text
+  createdAt   DateTime @default(now())
+
+  @@map("expenses")
+}
+
+model MaintenanceRequest {
+  id          String   @id @default(uuid())
+  title       String
+  description String   @db.Text
+  propertyName String
+  unitNumber  String
+  priority    String   @default("Normal")
+  status      String   @default("New")
+  createdAt   DateTime @default(now())
+
+  @@map("maintenance_requests")
+}
+
+model Inspection {
+  id           String   @id @default(uuid())
+  propertyName String
+  unitNumber   String
+  inspector    String
+  status       String   @default("Scheduled")
+  date         DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@map("inspections")
+}
+
+model Income {
+  id          String   @id @default(uuid())
+  category    String
+  amount      Float
+  date        DateTime @default(now())
+  description String   @db.Text
+  status      String   @default("Cleared")
+  createdAt   DateTime @default(now())
+
+  @@map("incomes")
+}
+
+model Signature {
+  id             String   @id @default(uuid())
+  documentName   String
+  documentId     String
+  recipientName  String
+  recipientEmail String
+  status         String   @default("Sent")
+  sentAt         DateTime @default(now())
+  expiresAt      DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@map("signatures")
+}
