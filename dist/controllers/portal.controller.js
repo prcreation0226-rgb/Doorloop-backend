@@ -817,7 +817,32 @@ class PortalController {
     }
     async createCrmLead(req, res, next) {
         try {
-            const { name, firstName, lastName, email, phone, source, budget, moveInDate, priority, assignedAgent, notes, property, companyId } = req.body;
+            const { id, name, firstName, lastName, email, phone, source, budget, moveInDate, priority, assignedAgent, notes, property, companyId, status } = req.body;
+            if (id) {
+                const existing = await database_1.default.crmLead.findUnique({
+                    where: { id },
+                });
+                if (existing) {
+                    const lead = await database_1.default.crmLead.update({
+                        where: { id },
+                        data: {
+                            name: name || undefined,
+                            email: email || undefined,
+                            phone: phone || undefined,
+                            source: source || undefined,
+                            status: status || undefined,
+                            budget: budget !== undefined ? (budget ? Number(budget) : null) : undefined,
+                            moveInDate: moveInDate !== undefined ? moveInDate : undefined,
+                            priority: priority || undefined,
+                            assignedAgent: assignedAgent !== undefined ? assignedAgent : undefined,
+                            notes: notes !== undefined ? notes : undefined,
+                            property: property !== undefined ? property : undefined,
+                            companyId: companyId !== undefined ? companyId : undefined,
+                        },
+                    });
+                    return (0, apiResponse_1.sendSuccess)({ res, data: lead });
+                }
+            }
             const resolvedName = name || [firstName, lastName].filter(Boolean).join(' ') || 'Unnamed Lead';
             const resolvedSource = source || 'Portal';
             const lead = await database_1.default.crmLead.create({
@@ -826,6 +851,7 @@ class PortalController {
                     email,
                     phone,
                     source: resolvedSource,
+                    status: status || 'New',
                     budget: budget ? Number(budget) : null,
                     moveInDate: moveInDate || null,
                     priority: priority || 'Medium',
