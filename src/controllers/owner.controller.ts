@@ -23,13 +23,7 @@ export class OwnerController {
     try {
       const { name, firstName, lastName, email, phone, payoutMethod } = req.body;
       const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
-      
-      let companyId = req.user?.companyId || null;
-      if (companyId) {
-        const companyExists = await prisma.company.findUnique({ where: { id: companyId } });
-        if (!companyExists) companyId = null;
-      }
-
+      const companyId = req.user?.companyId;
       const owner = await prisma.owner.create({
         data: {
           name: resolvedName,
@@ -50,12 +44,7 @@ export class OwnerController {
       const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
       const { name, firstName, lastName, email, phone, payoutMethod } = req.body;
       const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
-      
-      let companyId = req.user?.companyId || null;
-      if (companyId) {
-        const companyExists = await prisma.company.findUnique({ where: { id: companyId } });
-        if (!companyExists) companyId = null;
-      }
+      const companyId = req.user?.companyId;
 
       const owner = await prisma.owner.update({
         where: companyId ? { id, companyId } : { id },
@@ -64,7 +53,6 @@ export class OwnerController {
           email,
           phone,
           payoutMethod,
-          companyId,
         },
       });
       return sendSuccess({ res, data: owner });
