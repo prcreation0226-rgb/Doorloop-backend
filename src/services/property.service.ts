@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { AppError } from '../utils/appError';
+import cloudinary from '../config/cloudinary';
 
 export class PropertyService {
   async getAllProperties(companyId?: string) {
@@ -27,7 +28,7 @@ export class PropertyService {
     return prop;
   }
 
-  async createProperty(data: any) {
+  async createProperty(data: any, file?: any) {
     let ownerId = data.ownerId;
     let ownerExists = false;
 
@@ -69,23 +70,44 @@ export class PropertyService {
     if (!validTypes.includes(typeVal)) {
       typeVal = 'Apartment';
     }
+
+    // Cloudinary upload
+    let imageUrl = data.imageUrl || null;
+    if (file) {
+      try {
+        imageUrl = await new Promise<string>((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            { folder: 'properties' },
+            (error, result) => {
+              if (error) return reject(error);
+              resolve(result?.secure_url || '');
+            }
+          );
+          uploadStream.end(file.buffer);
+        });
+      } catch (err) {
+        console.error('Cloudinary image upload failed:', err);
+      }
+    }
+
     return prisma.property.create({
       data: {
         name: data.name,
         type: typeVal as any,
         status: data.status || 'Active',
         ownerId: ownerId,
-        ownershipPercentage: data.ownershipPercentage || 100,
+        ownershipPercentage: Number(data.ownershipPercentage) || 100,
         managementCompany: data.managementCompany || 'Apex Property Management',
         address: data.address || 'Austin, TX',
         streetAddress: data.streetAddress || data.address || '100 Main St',
         city: data.city || 'Austin',
         state: data.state || 'TX',
         zip: data.zip || '78701',
-        yearBuilt: data.yearBuilt || 2020,
-        squareFootage: data.squareFootage || 10000,
-        purchasePrice: data.purchasePrice || 1000000,
-        currentValue: data.currentValue || 1200000,
+        yearBuilt: Number(data.yearBuilt) || 2020,
+        squareFootage: Number(data.squareFootage) || 10000,
+        purchasePrice: Number(data.purchasePrice) || 1000000,
+        currentValue: Number(data.currentValue) || 1200000,
+        imageUrl: imageUrl,
         companyId: data.companyId,
       },
     });

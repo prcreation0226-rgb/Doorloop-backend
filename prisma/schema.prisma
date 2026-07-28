@@ -178,6 +178,7 @@ model Property {
   purchasePrice       Float
   currentValue        Float
   monthlyExpenses     Float        @default(0)
+  imageUrl            String?      @db.Text
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 

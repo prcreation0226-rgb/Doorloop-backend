@@ -28,7 +28,8 @@ export class PropertyController {
   async create(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const companyId = req.user?.companyId;
-      const newProp = await propertyService.createProperty({ ...req.body, companyId });
+      const file = req.file;
+      const newProp = await propertyService.createProperty({ ...req.body, companyId }, file);
       return sendSuccess({ res, statusCode: 201, data: newProp });
     } catch (error) {
       next(error);
