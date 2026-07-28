@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.superAdminService = exports.SuperAdminService = void 0;
+const bcrypt_1 = __importDefault(require("bcrypt"));
 const database_1 = __importDefault(require("../config/database"));
 class SuperAdminService {
     // Companies Directory
@@ -27,7 +28,7 @@ class SuperAdminService {
     }
     async createCompany(data) {
         const code = data.code || data.name.substring(0, 4).toUpperCase();
-        return database_1.default.company.create({
+        const company = await database_1.default.company.create({
             data: {
                 name: data.name,
                 code,
@@ -39,6 +40,27 @@ class SuperAdminService {
                 status: 'Active',
             },
         });
+        // Create the matching login User for the company
+        const passwordHash = await bcrypt_1.default.hash(data.password || 'admin123', 12);
+        const superAdminRole = await database_1.default.role.findFirst({ where: { name: 'Super Admin' } });
+        const nameParts = data.contactName.trim().split(/\s+/);
+        const firstName = nameParts[0] || 'Admin';
+        const lastName = nameParts.slice(1).join(' ') || 'User';
+        if (superAdminRole) {
+            await database_1.default.user.create({
+                data: {
+                    email: data.email,
+                    passwordHash,
+                    firstName,
+                    lastName,
+                    phone: data.phone,
+                    roleId: superAdminRole.id,
+                    companyId: company.id,
+                    status: 'Active',
+                },
+            });
+        }
+        return company;
     }
     async updateCompany(id, data) {
         return database_1.default.company.update({
