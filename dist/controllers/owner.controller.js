@@ -26,7 +26,12 @@ class OwnerController {
         try {
             const { name, firstName, lastName, email, phone, payoutMethod } = req.body;
             const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
-            const companyId = req.user?.companyId;
+            let companyId = req.user?.companyId || null;
+            if (companyId) {
+                const companyExists = await database_js_1.default.company.findUnique({ where: { id: companyId } });
+                if (!companyExists)
+                    companyId = null;
+            }
             const owner = await database_js_1.default.owner.create({
                 data: {
                     name: resolvedName,
@@ -47,7 +52,12 @@ class OwnerController {
             const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
             const { name, firstName, lastName, email, phone, payoutMethod } = req.body;
             const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
-            const companyId = req.user?.companyId;
+            let companyId = req.user?.companyId || null;
+            if (companyId) {
+                const companyExists = await database_js_1.default.company.findUnique({ where: { id: companyId } });
+                if (!companyExists)
+                    companyId = null;
+            }
             const owner = await database_js_1.default.owner.update({
                 where: companyId ? { id, companyId } : { id },
                 data: {
@@ -55,6 +65,7 @@ class OwnerController {
                     email,
                     phone,
                     payoutMethod,
+                    companyId,
                 },
             });
             return (0, apiResponse_js_1.sendSuccess)({ res, data: owner });
