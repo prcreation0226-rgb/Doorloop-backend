@@ -46,6 +46,17 @@ export class PropertyController {
       next(error);
     }
   }
+
+  async update(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const file = req.file;
+      const updated = await propertyService.updateProperty(id, req.body, file);
+      return sendSuccess({ res, data: updated });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const propertyController = new PropertyController();

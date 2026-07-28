@@ -123,6 +123,77 @@ export class PropertyService {
       where: { id },
     });
   }
+
+  async updateProperty(id: string, data: any, file?: any) {
+    const prop = await prisma.property.findUnique({
+      where: { id },
+    });
+    if (!prop) throw new AppError('Property not found.', 404, 'NOT_FOUND');
+
+    let ownerId = data.ownerId;
+    if (ownerId) {
+      const owner = await prisma.owner.findUnique({
+        where: { id: ownerId },
+      });
+      if (!owner) {
+        ownerId = prop.ownerId;
+      }
+    } else {
+      ownerId = prop.ownerId;
+    }
+
+    let typeVal = data.type;
+    if (typeVal) {
+      typeVal = typeVal.replace(/\s+/g, '');
+      const validTypes = ['Apartment', 'Commercial', 'SingleFamily', 'MultiFamily', 'HOA'];
+      if (!validTypes.includes(typeVal)) {
+        typeVal = prop.type;
+      }
+    } else {
+      typeVal = prop.type;
+    }
+
+    // Cloudinary upload
+    let imageUrl = data.imageUrl !== undefined ? data.imageUrl : prop.imageUrl;
+    if (file) {
+      try {
+        imageUrl = await new Promise<string>((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            { folder: 'properties' },
+            (error, result) => {
+              if (error) return reject(error);
+              resolve(result?.secure_url || '');
+            }
+          );
+          uploadStream.end(file.buffer);
+        });
+      } catch (err) {
+        console.error('Cloudinary image upload failed:', err);
+      }
+    }
+
+    return prisma.property.update({
+      where: { id },
+      data: {
+        name: data.name !== undefined ? data.name : prop.name,
+        type: typeVal as any,
+        status: data.status !== undefined ? data.status : prop.status,
+        ownerId: ownerId,
+        ownershipPercentage: data.ownershipPercentage !== undefined ? Number(data.ownershipPercentage) : prop.ownershipPercentage,
+        managementCompany: data.managementCompany !== undefined ? data.managementCompany : prop.managementCompany,
+        address: data.address !== undefined ? data.address : prop.address,
+        streetAddress: data.streetAddress !== undefined ? data.streetAddress : prop.streetAddress,
+        city: data.city !== undefined ? data.city : prop.city,
+        state: data.state !== undefined ? data.state : prop.state,
+        zip: data.zip !== undefined ? data.zip : prop.zip,
+        yearBuilt: data.yearBuilt !== undefined ? Number(data.yearBuilt) : prop.yearBuilt,
+        squareFootage: data.squareFootage !== undefined ? Number(data.squareFootage) : prop.squareFootage,
+        purchasePrice: data.purchasePrice !== undefined ? Number(data.purchasePrice) : prop.purchasePrice,
+        currentValue: data.currentValue !== undefined ? Number(data.currentValue) : prop.currentValue,
+        imageUrl: imageUrl,
+      },
+    });
+  }
 }
 
 export const propertyService = new PropertyService();
