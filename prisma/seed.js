@@ -201,12 +201,10 @@ async function main() {
         where: { email: 'bill.a@investments.com' },
         update: {},
         create: {
-            firstName: 'William',
-            lastName: 'Anderson',
+            name: 'William Anderson',
             email: 'bill.a@investments.com',
             phone: '(212) 555-0122',
             payoutMethod: 'ACH/Direct Deposit',
-            propertiesOwnedCount: 4,
         },
     });
     // 5. Create Sample Property & Units

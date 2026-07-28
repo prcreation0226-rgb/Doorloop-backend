@@ -21,12 +21,12 @@ export class OwnerController {
 
   async create(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const { firstName, lastName, email, phone, payoutMethod } = req.body;
+      const { name, firstName, lastName, email, phone, payoutMethod } = req.body;
+      const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
       const companyId = req.user?.companyId;
       const owner = await prisma.owner.create({
         data: {
-          firstName,
-          lastName,
+          name: resolvedName,
           email,
           phone,
           payoutMethod: payoutMethod || 'ACH/Direct Deposit',
@@ -34,6 +34,42 @@ export class OwnerController {
         },
       });
       return sendSuccess({ res, statusCode: 201, data: owner });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async update(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const { name, firstName, lastName, email, phone, payoutMethod } = req.body;
+      const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
+      const companyId = req.user?.companyId;
+
+      const owner = await prisma.owner.update({
+        where: companyId ? { id, companyId } : { id },
+        data: {
+          name: resolvedName,
+          email,
+          phone,
+          payoutMethod,
+        },
+      });
+      return sendSuccess({ res, data: owner });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async delete(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const companyId = req.user?.companyId;
+
+      await prisma.owner.delete({
+        where: companyId ? { id, companyId } : { id },
+      });
+      return sendSuccess({ res, message: 'Owner deleted successfully' });
     } catch (error) {
       next(error);
     }

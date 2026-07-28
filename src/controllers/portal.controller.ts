@@ -240,8 +240,7 @@ export class PortalController {
         if (!ownerId) {
           const newOwner = await prisma.owner.create({
             data: {
-              firstName: 'Primary',
-              lastName: 'Owner',
+              name: 'Primary Owner',
               email: 'owner@apexpm.com',
               phone: '555-0100',
             },
@@ -397,7 +396,7 @@ export class PortalController {
         let ownerId = firstOwner?.id;
         if (!ownerId) {
           const newOwner = await prisma.owner.create({
-            data: { firstName: 'Primary', lastName: 'Investor', email: 'investor@apexpm.com', phone: '555-0100' },
+            data: { name: 'Primary Investor', email: 'investor@apexpm.com', phone: '555-0100' },
           });
           ownerId = newOwner.id;
         }
@@ -625,8 +624,7 @@ export class PortalController {
       if (!owner) {
         owner = await prisma.owner.create({
           data: {
-            firstName: 'William',
-            lastName: 'Anderson',
+            name: 'William Anderson',
             email: 'bill.a@investments.com',
             phone: '(212) 555-0122',
             streetAddress: '742 Evergreen Terrace, New York, NY',
@@ -635,12 +633,15 @@ export class PortalController {
         });
       }
 
+      const [firstName = '', ...lastNameParts] = (owner.name || '').split(' ');
+      const lastName = lastNameParts.join(' ');
+
       return sendSuccess({
         res,
         data: {
           id: owner.id,
-          firstName: owner.firstName || 'William',
-          lastName: owner.lastName || 'Anderson',
+          firstName: firstName || 'William',
+          lastName: lastName || 'Anderson',
           email: owner.email || 'bill.a@investments.com',
           phone: owner.phone || '(212) 555-0122',
           streetAddress: owner.streetAddress || '742 Evergreen Terrace, New York, NY',
@@ -657,13 +658,13 @@ export class PortalController {
   async updateOwnerProfile(req: Request, res: Response, next: NextFunction) {
     try {
       const { firstName, lastName, email, phone, streetAddress, bankName, accountNumber } = req.body;
+      const inputName = [firstName, lastName].filter(Boolean).join(' ');
       let owner = await prisma.owner.findFirst();
 
       if (!owner) {
         owner = await prisma.owner.create({
           data: {
-            firstName: firstName || 'William',
-            lastName: lastName || 'Anderson',
+            name: inputName || 'William Anderson',
             email: email || 'bill.a@investments.com',
             phone: phone || '(212) 555-0122',
             streetAddress: streetAddress || '742 Evergreen Terrace, New York, NY',
@@ -673,8 +674,7 @@ export class PortalController {
         owner = await prisma.owner.update({
           where: { id: owner.id },
           data: {
-            firstName: firstName || owner.firstName,
-            lastName: lastName || owner.lastName,
+            name: inputName || owner.name,
             email: email || owner.email,
             phone: phone || owner.phone,
             streetAddress: streetAddress || owner.streetAddress,
@@ -682,12 +682,15 @@ export class PortalController {
         });
       }
 
+      const [resFirstName = '', ...resLastNameParts] = (owner.name || '').split(' ');
+      const resLastName = resLastNameParts.join(' ');
+
       return sendSuccess({
         res,
         data: {
           id: owner.id,
-          firstName: owner.firstName || 'William',
-          lastName: owner.lastName || 'Anderson',
+          firstName: resFirstName || 'William',
+          lastName: resLastName || 'Anderson',
           email: owner.email,
           phone: owner.phone,
           streetAddress: owner.streetAddress,

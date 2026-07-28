@@ -57,8 +57,7 @@ class PropertyService {
             else {
                 const defaultOwner = await database_1.default.owner.create({
                     data: {
-                        firstName: 'Default',
-                        lastName: 'Owner',
+                        name: 'Default Owner',
                         email: `default.owner.${Date.now()}@example.com`,
                         phone: '555-0100',
                         companyId: data.companyId,
