@@ -95,7 +95,7 @@ export class AccountingService {
 
   async getBankReconciliation(companyId?: string) {
     const bankAccounts = await this.getBankAccounts(companyId);
-    return bankAccounts.map((ba) => ({
+    return bankAccounts.map((ba: any) => ({
       id: `rec-${ba.id}`,
       bankAccountId: ba.id,
       bankAccountName: ba.name,

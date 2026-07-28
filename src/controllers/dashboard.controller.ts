@@ -37,7 +37,7 @@ export class DashboardController {
           ...(companyId ? { companyId } : {}),
         },
       });
-      const monthlyRevenue = activeLeases.reduce((sum, l) => sum + (l.rentAmount || 0), 0);
+      const monthlyRevenue = activeLeases.reduce((sum: number, l: any) => sum + (l.rentAmount || 0), 0);
 
       // Pending rent from unpaid payments
       const unpaidPayments = await prisma.rentPayment.findMany({
@@ -46,7 +46,7 @@ export class DashboardController {
           ...(companyId ? { companyId } : {}),
         },
       });
-      const pendingRent = unpaidPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const pendingRent = unpaidPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
 
       // Open maintenance orders
       const openMaintenance = await prisma.workOrder.count({

@@ -369,7 +369,7 @@ export class PortalController {
   async getOwnerFinancials(req: Request, res: Response, next: NextFunction) {
     try {
       const properties = await prisma.property.findMany();
-      const formatted = properties.map((p, idx) => ({
+      const formatted = properties.map((p: any, idx: number) => ({
         id: p.id,
         date: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '2026-07-20',
         propertyName: p.name,
@@ -436,7 +436,7 @@ export class PortalController {
   async getOwnerStatements(req: Request, res: Response, next: NextFunction) {
     try {
       const properties = await prisma.property.findMany();
-      const statements = properties.map((p) => {
+      const statements = properties.map((p: any) => {
         const income = p.currentValue ? Math.round(p.currentValue / 500) : 2400;
         const expenses = Math.round(income * 0.15);
         return {
@@ -1010,8 +1010,8 @@ export class PortalController {
           role: 'Management',
           unread: false,
           messages: messages
-            .filter((m) => m.sender === 'Property Manager Office' || m.recipient === 'Property Manager Office')
-            .map((m) => ({
+            .filter((m: any) => m.sender === 'Property Manager Office' || m.recipient === 'Property Manager Office')
+            .map((m: any) => ({
               id: m.id,
               senderName: m.sender,
               role: m.sender.includes('Resident') ? 'Tenant' : 'Management',
@@ -1027,8 +1027,8 @@ export class PortalController {
           role: 'Leasing Desk',
           unread: true,
           messages: messages
-            .filter((m) => m.sender === 'Leasing Office' || m.recipient === 'Leasing Office')
-            .map((m) => ({
+            .filter((m: any) => m.sender === 'Leasing Office' || m.recipient === 'Leasing Office')
+            .map((m: any) => ({
               id: m.id,
               senderName: m.sender,
               role: m.sender.includes('Resident') ? 'Tenant' : 'Leasing Desk',
@@ -1113,6 +1113,7 @@ export class PortalController {
           balance: parseFloat(amount || '0'),
           dueDate: String(dueDate || new Date().toISOString().split('T')[0]),
           status: status || 'Sent',
+          lineItems: JSON.stringify(req.body.lineItems || []),
         },
       });
       return sendSuccess({ res, statusCode: 201, data: invoice });
@@ -1391,7 +1392,7 @@ export class PortalController {
         });
       }
 
-      if (!orders.some((o) => ['Completed', 'Closed', 'Rejected'].includes(o.status))) {
+      if (!orders.some((o: any) => ['Completed', 'Closed', 'Rejected'].includes(o.status))) {
         await prisma.workOrder.createMany({
           data: [
             {

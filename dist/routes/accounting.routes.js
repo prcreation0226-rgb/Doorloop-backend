@@ -1,0 +1,16 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const accounting_controller_1 = require("../controllers/accounting.controller");
+const router = (0, express_1.Router)();
+router.get('/accounts', (req, res, next) => accounting_controller_1.accountingController.getCoA(req, res, next));
+router.post('/accounts', (req, res, next) => accounting_controller_1.accountingController.createAccount(req, res, next));
+router.delete('/accounts/:id', (req, res, next) => accounting_controller_1.accountingController.deleteAccount(req, res, next));
+router.get('/journal-entries', (req, res, next) => accounting_controller_1.accountingController.getJournalEntries(req, res, next));
+router.post('/journal-entries', (req, res, next) => accounting_controller_1.accountingController.postJournalEntry(req, res, next));
+router.get('/general-ledger', (req, res, next) => accounting_controller_1.accountingController.getGeneralLedger(req, res, next));
+router.get('/bank-accounts', (req, res, next) => accounting_controller_1.accountingController.getBankAccounts(req, res, next));
+router.post('/bank-accounts', (req, res, next) => accounting_controller_1.accountingController.createBankAccount(req, res, next));
+router.delete('/bank-accounts/:id', (req, res, next) => accounting_controller_1.accountingController.deleteBankAccount(req, res, next));
+router.get('/bank-reconciliation', (req, res, next) => accounting_controller_1.accountingController.getBankReconciliation(req, res, next));
+exports.default = router;

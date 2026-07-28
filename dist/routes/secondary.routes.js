@@ -1,0 +1,23 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const secondary_controller_1 = require("../controllers/secondary.controller");
+const router = (0, express_1.Router)();
+// Announcements
+router.get('/announcements', (req, res, next) => secondary_controller_1.secondaryController.getAnnouncements(req, res, next));
+router.post('/announcements', (req, res, next) => secondary_controller_1.secondaryController.createAnnouncement(req, res, next));
+// Insurance
+router.get('/insurance', (req, res, next) => secondary_controller_1.secondaryController.getInsurancePolicies(req, res, next));
+router.post('/insurance', (req, res, next) => secondary_controller_1.secondaryController.createInsurancePolicy(req, res, next));
+// Promotions / Coupons
+router.get('/promotions', (req, res, next) => secondary_controller_1.secondaryController.getPromotions(req, res, next));
+router.post('/promotions', (req, res, next) => secondary_controller_1.secondaryController.createPromotion(req, res, next));
+// Notifications
+router.get('/notifications', (req, res, next) => secondary_controller_1.secondaryController.getNotifications(req, res, next));
+router.put('/notifications/:id/read', (req, res, next) => secondary_controller_1.secondaryController.markNotificationRead(req, res, next));
+// Documents
+router.get('/documents', (req, res, next) => secondary_controller_1.secondaryController.getDocuments(req, res, next));
+router.post('/documents', (req, res, next) => secondary_controller_1.secondaryController.createDocument(req, res, next));
+// AI Chat
+router.post('/ai/chat', (req, res, next) => secondary_controller_1.secondaryController.processAiChat(req, res, next));
+exports.default = router;

@@ -1,0 +1,8 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const owner_controller_js_1 = require("../controllers/owner.controller.js");
+const router = (0, express_1.Router)();
+router.get('/', (req, res, next) => owner_controller_js_1.ownerController.getAll(req, res, next));
+router.post('/', (req, res, next) => owner_controller_js_1.ownerController.create(req, res, next));
+exports.default = router;

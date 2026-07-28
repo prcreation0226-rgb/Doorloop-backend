@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const unit_controller_1 = require("../controllers/unit.controller");
+const router = (0, express_1.Router)();
+router.get('/', (req, res, next) => unit_controller_1.unitController.getAll(req, res, next));
+router.get('/:id', (req, res, next) => unit_controller_1.unitController.getById(req, res, next));
+router.post('/', (req, res, next) => unit_controller_1.unitController.create(req, res, next));
+router.put('/:id', (req, res, next) => unit_controller_1.unitController.update(req, res, next));
+router.delete('/:id', (req, res, next) => unit_controller_1.unitController.delete(req, res, next));
+router.post('/:id/assign-tenant', (req, res, next) => unit_controller_1.unitController.assignTenant(req, res, next));
+exports.default = router;

@@ -128,7 +128,7 @@ class InvoiceController {
         });
       }
 
-      const formatted = invoices.map((inv) => ({
+      const formatted = invoices.map((inv: any) => ({
         ...inv,
         lineItems: (() => {
           try { return JSON.parse(inv.lineItems as string); } catch { return []; }

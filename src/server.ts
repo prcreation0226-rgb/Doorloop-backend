@@ -8,7 +8,7 @@ prisma.$connect()
   .then(() => {
     logger.info('🔌 MySQL Database connected successfully via Prisma Client!');
   })
-  .catch((error) => {
+  .catch((error: Error) => {
     logger.error(error, '❌ Failed to connect to the MySQL database:');
   });
 
