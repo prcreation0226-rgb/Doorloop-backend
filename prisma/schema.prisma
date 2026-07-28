@@ -630,7 +630,7 @@ model Invoice {
   paidAmount   Float    @default(0)
   balance      Float
   status       String   @default("Draft")
-  lineItems    String   @db.Text @default("[]")
+  lineItems    String   @db.Text
   notes        String?  @db.Text
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -660,7 +660,7 @@ model ServiceRequest {
   cost               Float?
   scheduledDate      String?
   notes              String?  @db.Text
-  messages           String   @db.Text @default("[]")
+  messages           String   @db.Text
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
