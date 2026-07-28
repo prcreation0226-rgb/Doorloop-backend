@@ -42,11 +42,11 @@ class SuperAdminService {
         });
         // Create the matching login User for the company
         const passwordHash = await bcrypt_1.default.hash(data.password || 'admin123', 12);
-        const superAdminRole = await database_1.default.role.findFirst({ where: { name: 'Super Admin' } });
+        const propertyManagerRole = await database_1.default.role.findFirst({ where: { name: 'Property Manager' } });
         const nameParts = data.contactName.trim().split(/\s+/);
         const firstName = nameParts[0] || 'Admin';
         const lastName = nameParts.slice(1).join(' ') || 'User';
-        if (superAdminRole) {
+        if (propertyManagerRole) {
             await database_1.default.user.create({
                 data: {
                     email: data.email,
@@ -54,7 +54,7 @@ class SuperAdminService {
                     firstName,
                     lastName,
                     phone: data.phone,
-                    roleId: superAdminRole.id,
+                    roleId: propertyManagerRole.id,
                     companyId: company.id,
                     status: 'Active',
                 },
