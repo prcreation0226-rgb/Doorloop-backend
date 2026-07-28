@@ -817,22 +817,22 @@ class PortalController {
     }
     async createCrmLead(req, res, next) {
         try {
-            const { firstName, lastName, email, phone, propertyOfInterestId, propertyName, budget, moveInDate, source, priority, assignedAgent, notes, status, } = req.body;
+            const { name, firstName, lastName, email, phone, source, budget, moveInDate, priority, assignedAgent, notes, property, companyId } = req.body;
+            const resolvedName = name || [firstName, lastName].filter(Boolean).join(' ') || 'Unnamed Lead';
+            const resolvedSource = source || 'Portal';
             const lead = await database_1.default.crmLead.create({
                 data: {
-                    firstName: firstName || 'Unnamed',
-                    lastName: lastName || 'Lead',
-                    email: email || '',
-                    phone: phone || '',
-                    propertyOfInterestId: propertyOfInterestId || null,
-                    propertyName: propertyName || null,
-                    budget: budget ? parseFloat(budget) : null,
+                    name: resolvedName,
+                    email,
+                    phone,
+                    source: resolvedSource,
+                    budget: budget ? Number(budget) : null,
                     moveInDate: moveInDate || null,
-                    source: source || 'Portal',
                     priority: priority || 'Medium',
                     assignedAgent: assignedAgent || null,
                     notes: notes || null,
-                    status: status || 'New',
+                    property: property || null,
+                    companyId: companyId || null,
                 },
             });
             return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: lead });

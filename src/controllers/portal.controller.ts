@@ -856,7 +856,7 @@ export class PortalController {
 
   async createCrmLead(req: Request, res: Response, next: NextFunction) {
     try {
-      const { name, firstName, lastName, email, phone, source } = req.body;
+      const { name, firstName, lastName, email, phone, source, budget, moveInDate, priority, assignedAgent, notes, property, companyId } = req.body;
       const resolvedName = name || [firstName, lastName].filter(Boolean).join(' ') || 'Unnamed Lead';
       const resolvedSource = source || 'Portal';
       const lead = await prisma.crmLead.create({
@@ -864,7 +864,14 @@ export class PortalController {
           name: resolvedName, 
           email, 
           phone, 
-          source: resolvedSource 
+          source: resolvedSource,
+          budget: budget ? Number(budget) : null,
+          moveInDate: moveInDate || null,
+          priority: priority || 'Medium',
+          assignedAgent: assignedAgent || null,
+          notes: notes || null,
+          property: property || null,
+          companyId: companyId || null,
         },
       });
       return sendSuccess({ res, statusCode: 201, data: lead });
