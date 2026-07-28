@@ -24,12 +24,12 @@ class OwnerController {
     }
     async create(req, res, next) {
         try {
-            const { firstName, lastName, email, phone, payoutMethod } = req.body;
+            const { name, firstName, lastName, email, phone, payoutMethod } = req.body;
+            const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
             const companyId = req.user?.companyId;
             const owner = await database_js_1.default.owner.create({
                 data: {
-                    firstName,
-                    lastName,
+                    name: resolvedName,
                     email,
                     phone,
                     payoutMethod: payoutMethod || 'ACH/Direct Deposit',
@@ -37,6 +37,40 @@ class OwnerController {
                 },
             });
             return (0, apiResponse_js_1.sendSuccess)({ res, statusCode: 201, data: owner });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    async update(req, res, next) {
+        try {
+            const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+            const { name, firstName, lastName, email, phone, payoutMethod } = req.body;
+            const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
+            const companyId = req.user?.companyId;
+            const owner = await database_js_1.default.owner.update({
+                where: companyId ? { id, companyId } : { id },
+                data: {
+                    name: resolvedName,
+                    email,
+                    phone,
+                    payoutMethod,
+                },
+            });
+            return (0, apiResponse_js_1.sendSuccess)({ res, data: owner });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    async delete(req, res, next) {
+        try {
+            const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+            const companyId = req.user?.companyId;
+            await database_js_1.default.owner.delete({
+                where: companyId ? { id, companyId } : { id },
+            });
+            return (0, apiResponse_js_1.sendSuccess)({ res, message: 'Owner deleted successfully' });
         }
         catch (error) {
             next(error);

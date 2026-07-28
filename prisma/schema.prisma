@@ -135,8 +135,8 @@ model UserAssignment {
 // --- Real Estate Core Models ---
 model Owner {
   id                   String              @id @default(uuid())
-  firstName            String
-  lastName             String
+  name                 String              @default("")
+  companyName          String?
   email                String              @unique
   phone                String
   streetAddress        String?
@@ -178,6 +178,7 @@ model Property {
   purchasePrice       Float
   currentValue        Float
   monthlyExpenses     Float        @default(0)
+  imageUrl            String?      @db.Text
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 

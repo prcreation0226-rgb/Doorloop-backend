@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.propertyService = exports.PropertyService = void 0;
 const database_1 = __importDefault(require("../config/database"));
 const appError_1 = require("../utils/appError");
+const cloudinary_1 = __importDefault(require("../config/cloudinary"));
 class PropertyService {
     async getAllProperties(companyId) {
         return database_1.default.property.findMany({
@@ -30,7 +31,7 @@ class PropertyService {
             throw new appError_1.AppError('Property not found.', 404, 'NOT_FOUND');
         return prop;
     }
-    async createProperty(data) {
+    async createProperty(data, file) {
         let ownerId = data.ownerId;
         let ownerExists = false;
         if (ownerId) {
@@ -56,8 +57,7 @@ class PropertyService {
             else {
                 const defaultOwner = await database_1.default.owner.create({
                     data: {
-                        firstName: 'Default',
-                        lastName: 'Owner',
+                        name: 'Default Owner',
                         email: `default.owner.${Date.now()}@example.com`,
                         phone: '555-0100',
                         companyId: data.companyId,
@@ -71,23 +71,41 @@ class PropertyService {
         if (!validTypes.includes(typeVal)) {
             typeVal = 'Apartment';
         }
+        // Cloudinary upload
+        let imageUrl = data.imageUrl || null;
+        if (file) {
+            try {
+                imageUrl = await new Promise((resolve, reject) => {
+                    const uploadStream = cloudinary_1.default.uploader.upload_stream({ folder: 'properties' }, (error, result) => {
+                        if (error)
+                            return reject(error);
+                        resolve(result?.secure_url || '');
+                    });
+                    uploadStream.end(file.buffer);
+                });
+            }
+            catch (err) {
+                console.error('Cloudinary image upload failed:', err);
+            }
+        }
         return database_1.default.property.create({
             data: {
                 name: data.name,
                 type: typeVal,
                 status: data.status || 'Active',
                 ownerId: ownerId,
-                ownershipPercentage: data.ownershipPercentage || 100,
+                ownershipPercentage: Number(data.ownershipPercentage) || 100,
                 managementCompany: data.managementCompany || 'Apex Property Management',
                 address: data.address || 'Austin, TX',
                 streetAddress: data.streetAddress || data.address || '100 Main St',
                 city: data.city || 'Austin',
                 state: data.state || 'TX',
                 zip: data.zip || '78701',
-                yearBuilt: data.yearBuilt || 2020,
-                squareFootage: data.squareFootage || 10000,
-                purchasePrice: data.purchasePrice || 1000000,
-                currentValue: data.currentValue || 1200000,
+                yearBuilt: Number(data.yearBuilt) || 2020,
+                squareFootage: Number(data.squareFootage) || 10000,
+                purchasePrice: Number(data.purchasePrice) || 1000000,
+                currentValue: Number(data.currentValue) || 1200000,
+                imageUrl: imageUrl,
                 companyId: data.companyId,
             },
         });

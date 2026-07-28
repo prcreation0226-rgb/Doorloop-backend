@@ -232,8 +232,7 @@ class PortalController {
                 if (!ownerId) {
                     const newOwner = await database_1.default.owner.create({
                         data: {
-                            firstName: 'Primary',
-                            lastName: 'Owner',
+                            name: 'Primary Owner',
                             email: 'owner@apexpm.com',
                             phone: '555-0100',
                         },
@@ -382,7 +381,7 @@ class PortalController {
                 let ownerId = firstOwner?.id;
                 if (!ownerId) {
                     const newOwner = await database_1.default.owner.create({
-                        data: { firstName: 'Primary', lastName: 'Investor', email: 'investor@apexpm.com', phone: '555-0100' },
+                        data: { name: 'Primary Investor', email: 'investor@apexpm.com', phone: '555-0100' },
                     });
                     ownerId = newOwner.id;
                 }
@@ -593,8 +592,7 @@ class PortalController {
             if (!owner) {
                 owner = await database_1.default.owner.create({
                     data: {
-                        firstName: 'William',
-                        lastName: 'Anderson',
+                        name: 'William Anderson',
                         email: 'bill.a@investments.com',
                         phone: '(212) 555-0122',
                         streetAddress: '742 Evergreen Terrace, New York, NY',
@@ -602,12 +600,14 @@ class PortalController {
                     },
                 });
             }
+            const [firstName = '', ...lastNameParts] = (owner.name || '').split(' ');
+            const lastName = lastNameParts.join(' ');
             return (0, apiResponse_1.sendSuccess)({
                 res,
                 data: {
                     id: owner.id,
-                    firstName: owner.firstName || 'William',
-                    lastName: owner.lastName || 'Anderson',
+                    firstName: firstName || 'William',
+                    lastName: lastName || 'Anderson',
                     email: owner.email || 'bill.a@investments.com',
                     phone: owner.phone || '(212) 555-0122',
                     streetAddress: owner.streetAddress || '742 Evergreen Terrace, New York, NY',
@@ -624,12 +624,12 @@ class PortalController {
     async updateOwnerProfile(req, res, next) {
         try {
             const { firstName, lastName, email, phone, streetAddress, bankName, accountNumber } = req.body;
+            const inputName = [firstName, lastName].filter(Boolean).join(' ');
             let owner = await database_1.default.owner.findFirst();
             if (!owner) {
                 owner = await database_1.default.owner.create({
                     data: {
-                        firstName: firstName || 'William',
-                        lastName: lastName || 'Anderson',
+                        name: inputName || 'William Anderson',
                         email: email || 'bill.a@investments.com',
                         phone: phone || '(212) 555-0122',
                         streetAddress: streetAddress || '742 Evergreen Terrace, New York, NY',
@@ -640,20 +640,21 @@ class PortalController {
                 owner = await database_1.default.owner.update({
                     where: { id: owner.id },
                     data: {
-                        firstName: firstName || owner.firstName,
-                        lastName: lastName || owner.lastName,
+                        name: inputName || owner.name,
                         email: email || owner.email,
                         phone: phone || owner.phone,
                         streetAddress: streetAddress || owner.streetAddress,
                     },
                 });
             }
+            const [resFirstName = '', ...resLastNameParts] = (owner.name || '').split(' ');
+            const resLastName = resLastNameParts.join(' ');
             return (0, apiResponse_1.sendSuccess)({
                 res,
                 data: {
                     id: owner.id,
-                    firstName: owner.firstName || 'William',
-                    lastName: owner.lastName || 'Anderson',
+                    firstName: resFirstName || 'William',
+                    lastName: resLastName || 'Anderson',
                     email: owner.email,
                     phone: owner.phone,
                     streetAddress: owner.streetAddress,

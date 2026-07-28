@@ -18,5 +18,8 @@ const envSchema = zod_1.z.object({
     JWT_REFRESH_SECRET: zod_1.z.string().default('doorloop_refresh_token_secret_key_2026_super_secure'),
     JWT_REFRESH_EXPIRES_IN: zod_1.z.string().default('7d'),
     BCRYPT_SALT_ROUNDS: zod_1.z.string().transform(Number).default('12'),
+    CLOUDINARY_CLOUD_NAME: zod_1.z.string().optional().default(''),
+    CLOUDINARY_API_KEY: zod_1.z.string().optional().default(''),
+    CLOUDINARY_API_SECRET: zod_1.z.string().optional().default(''),
 });
 exports.env = envSchema.parse(process.env);

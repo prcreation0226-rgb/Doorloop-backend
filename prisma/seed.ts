@@ -285,24 +285,20 @@ async function main() {
   // 5. Create Owners
   const ownerApex = await prisma.owner.create({
     data: {
-      firstName: 'William',
-      lastName: 'Anderson',
+      name: 'William Anderson',
       email: 'bill.a@investments.com',
       phone: '(212) 555-0122',
       payoutMethod: 'ACH/Direct Deposit',
-      propertiesOwnedCount: 4,
       companyId: apex.id,
     },
   });
 
   const ownerSkyline = await prisma.owner.create({
     data: {
-      firstName: 'Bob',
-      lastName: 'Vance',
+      name: 'Bob Vance',
       email: 'bob@skylineig.com',
       phone: '(415) 555-0233',
       payoutMethod: 'ACH/Direct Deposit',
-      propertiesOwnedCount: 1,
       companyId: skyline.id,
     },
   });
