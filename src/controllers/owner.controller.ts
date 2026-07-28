@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import prisma from '../config/database.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware.js';
+import bcrypt from 'bcrypt';
 
 export class OwnerController {
   async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -21,7 +22,7 @@ export class OwnerController {
 
   async create(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const { name, firstName, lastName, email, phone, payoutMethod } = req.body;
+      const { name, firstName, lastName, email, phone, payoutMethod, password } = req.body;
       const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
       const companyId = req.user?.companyId;
       const owner = await prisma.owner.create({
@@ -33,6 +34,32 @@ export class OwnerController {
           companyId,
         },
       });
+
+      if (password) {
+        let role = await prisma.role.findUnique({
+          where: { name: 'Owner' },
+        });
+        if (!role) {
+          role = await prisma.role.findFirst() as any;
+        }
+        if (role) {
+          const passwordHash = await bcrypt.hash(password, 12);
+          const [first = '', ...lastParts] = resolvedName.split(' ');
+          const last = lastParts.join(' ') || 'Owner';
+          await prisma.user.create({
+            data: {
+              email,
+              passwordHash,
+              firstName: first || 'Owner',
+              lastName: last,
+              phone: phone || null,
+              roleId: role.id,
+              companyId,
+            },
+          });
+        }
+      }
+
       return sendSuccess({ res, statusCode: 201, data: owner });
     } catch (error) {
       next(error);
@@ -42,9 +69,13 @@ export class OwnerController {
   async update(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-      const { name, firstName, lastName, email, phone, payoutMethod } = req.body;
+      const { name, firstName, lastName, email, phone, payoutMethod, password } = req.body;
       const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
       const companyId = req.user?.companyId;
+
+      const oldOwner = await prisma.owner.findUnique({
+        where: { id },
+      });
 
       const owner = await prisma.owner.update({
         where: companyId ? { id, companyId } : { id },
@@ -55,6 +86,50 @@ export class OwnerController {
           payoutMethod,
         },
       });
+
+      if (password && oldOwner) {
+        const passwordHash = await bcrypt.hash(password, 12);
+        const [first = '', ...lastParts] = resolvedName.split(' ');
+        const last = lastParts.join(' ') || 'Owner';
+
+        const existingUser = await prisma.user.findFirst({
+          where: { email: oldOwner.email },
+        });
+
+        if (existingUser) {
+          await prisma.user.update({
+            where: { id: existingUser.id },
+            data: {
+              email,
+              passwordHash,
+              firstName: first || 'Owner',
+              lastName: last,
+              phone,
+            },
+          });
+        } else {
+          let role = await prisma.role.findUnique({
+            where: { name: 'Owner' },
+          });
+          if (!role) {
+            role = await prisma.role.findFirst() as any;
+          }
+          if (role) {
+            await prisma.user.create({
+              data: {
+                email,
+                passwordHash,
+                firstName: first || 'Owner',
+                lastName: last,
+                phone: phone || null,
+                roleId: role.id,
+                companyId,
+              },
+            });
+          }
+        }
+      }
+
       return sendSuccess({ res, data: owner });
     } catch (error) {
       next(error);

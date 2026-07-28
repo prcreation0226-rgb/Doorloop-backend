@@ -12,7 +12,7 @@ class AuthService {
     async login(email, pass) {
         let user = await database_1.default.user.findUnique({
             where: { email },
-            include: { role: true },
+            include: { role: true, company: true },
         });
         // Fallback search for demo portal email aliases (e.g. admin@apexpm.com, admin@apex.com, manager@apexpm.com)
         if (!user) {
@@ -23,11 +23,16 @@ class AuthService {
                         { email: 'admin@apexpm.com' },
                     ],
                 },
-                include: { role: true },
+                include: { role: true, company: true },
             });
         }
         if (!user) {
             throw new appError_1.AppError('Invalid credentials provided.', 401, 'INVALID_CREDENTIALS');
+        }
+        if (user.companyId && user.company) {
+            if (user.company.status !== 'Active') {
+                throw new appError_1.AppError('Your company account is suspended. Please contact support.', 403, 'COMPANY_SUSPENDED');
+            }
         }
         // Accept demo passwords (password123, admin123, password) or bcrypt hash comparison
         const isValidPassword = pass === 'password123' ||
