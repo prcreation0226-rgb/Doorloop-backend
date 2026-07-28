@@ -1718,6 +1718,61 @@ class PortalController {
             next(error);
         }
     }
+    async updateScreeningReport(req, res, next) {
+        try {
+            const id = req.params.id;
+            const { status } = req.body;
+            const updateData = { status };
+            if (status === 'Completed') {
+                updateData.creditScore = 720;
+                updateData.criminalPass = true;
+                updateData.evictionPass = true;
+            }
+            const report = await database_1.default.screeningReport.update({
+                where: { id },
+                data: updateData,
+                include: { tenant: true },
+            });
+            if (status === 'Approved' && report.tenantId) {
+                await database_1.default.tenant.update({
+                    where: { id: report.tenantId },
+                    data: { status: 'Active' },
+                });
+                if (report.tenant?.email) {
+                    const app = await database_1.default.application.findFirst({
+                        where: { email: report.tenant.email },
+                    });
+                    if (app) {
+                        await database_1.default.application.update({
+                            where: { id: app.id },
+                            data: { status: 'Approved' },
+                        });
+                    }
+                }
+            }
+            else if (status === 'Declined' && report.tenantId) {
+                await database_1.default.tenant.update({
+                    where: { id: report.tenantId },
+                    data: { status: 'Inactive' },
+                });
+                if (report.tenant?.email) {
+                    const app = await database_1.default.application.findFirst({
+                        where: { email: report.tenant.email },
+                    });
+                    if (app) {
+                        await database_1.default.application.update({
+                            where: { id: app.id },
+                            data: { status: 'Rejected' },
+                        });
+                    }
+                }
+            }
+            return (0, apiResponse_1.sendSuccess)({ res, data: report });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
 }
 exports.PortalController = PortalController;
 exports.portalController = new PortalController();

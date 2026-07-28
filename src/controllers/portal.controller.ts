@@ -1787,6 +1787,66 @@ export class PortalController {
       next(error);
     }
   }
+
+  async updateScreeningReport(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const { status } = req.body;
+
+      const updateData: any = { status };
+      if (status === 'Completed') {
+        updateData.creditScore = 720;
+        updateData.criminalPass = true;
+        updateData.evictionPass = true;
+      }
+
+      const report = await prisma.screeningReport.update({
+        where: { id },
+        data: updateData,
+        include: { tenant: true },
+      });
+
+      if (status === 'Approved' && report.tenantId) {
+        await prisma.tenant.update({
+          where: { id: report.tenantId },
+          data: { status: 'Active' },
+        });
+
+        if (report.tenant?.email) {
+          const app = await prisma.application.findFirst({
+            where: { email: report.tenant.email },
+          });
+          if (app) {
+            await prisma.application.update({
+              where: { id: app.id },
+              data: { status: 'Approved' },
+            });
+          }
+        }
+      } else if (status === 'Declined' && report.tenantId) {
+        await prisma.tenant.update({
+          where: { id: report.tenantId },
+          data: { status: 'Inactive' },
+        });
+
+        if (report.tenant?.email) {
+          const app = await prisma.application.findFirst({
+            where: { email: report.tenant.email },
+          });
+          if (app) {
+            await prisma.application.update({
+              where: { id: app.id },
+              data: { status: 'Rejected' },
+            });
+          }
+        }
+      }
+
+      return sendSuccess({ res, data: report });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const portalController = new PortalController();

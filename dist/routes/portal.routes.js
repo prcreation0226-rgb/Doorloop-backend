@@ -42,6 +42,7 @@ router.get('/crm/leads', (req, res, next) => portal_controller_1.portalControlle
 router.post('/crm/leads', (req, res, next) => portal_controller_1.portalController.createCrmLead(req, res, next));
 router.get('/screening/reports', (req, res, next) => portal_controller_1.portalController.getScreeningReports(req, res, next));
 router.post('/screening/reports', (req, res, next) => portal_controller_1.portalController.createScreeningReport(req, res, next));
+router.put('/screening/reports/:id', (req, res, next) => portal_controller_1.portalController.updateScreeningReport(req, res, next));
 router.get('/violations', (req, res, next) => portal_controller_1.portalController.getViolations(req, res, next));
 router.post('/violations', (req, res, next) => portal_controller_1.portalController.createViolation(req, res, next));
 // Maintenance Staff Profile & Tasks Views
