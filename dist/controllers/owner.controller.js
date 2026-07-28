@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ownerController = exports.OwnerController = void 0;
 const database_js_1 = __importDefault(require("../config/database.js"));
 const apiResponse_js_1 = require("../utils/apiResponse.js");
+const bcrypt_1 = __importDefault(require("bcrypt"));
 class OwnerController {
     async getAll(req, res, next) {
         try {
@@ -24,14 +25,9 @@ class OwnerController {
     }
     async create(req, res, next) {
         try {
-            const { name, firstName, lastName, email, phone, payoutMethod } = req.body;
+            const { name, firstName, lastName, email, phone, payoutMethod, password } = req.body;
             const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
-            let companyId = req.user?.companyId || null;
-            if (companyId) {
-                const companyExists = await database_js_1.default.company.findUnique({ where: { id: companyId } });
-                if (!companyExists)
-                    companyId = null;
-            }
+            const companyId = req.user?.companyId;
             const owner = await database_js_1.default.owner.create({
                 data: {
                     name: resolvedName,
@@ -41,6 +37,30 @@ class OwnerController {
                     companyId,
                 },
             });
+            if (password) {
+                let role = await database_js_1.default.role.findUnique({
+                    where: { name: 'Owner' },
+                });
+                if (!role) {
+                    role = await database_js_1.default.role.findFirst();
+                }
+                if (role) {
+                    const passwordHash = await bcrypt_1.default.hash(password, 12);
+                    const [first = '', ...lastParts] = resolvedName.split(' ');
+                    const last = lastParts.join(' ') || 'Owner';
+                    await database_js_1.default.user.create({
+                        data: {
+                            email,
+                            passwordHash,
+                            firstName: first || 'Owner',
+                            lastName: last,
+                            phone: phone || null,
+                            roleId: role.id,
+                            companyId,
+                        },
+                    });
+                }
+            }
             return (0, apiResponse_js_1.sendSuccess)({ res, statusCode: 201, data: owner });
         }
         catch (error) {
@@ -50,14 +70,12 @@ class OwnerController {
     async update(req, res, next) {
         try {
             const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-            const { name, firstName, lastName, email, phone, payoutMethod } = req.body;
+            const { name, firstName, lastName, email, phone, payoutMethod, password } = req.body;
             const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
-            let companyId = req.user?.companyId || null;
-            if (companyId) {
-                const companyExists = await database_js_1.default.company.findUnique({ where: { id: companyId } });
-                if (!companyExists)
-                    companyId = null;
-            }
+            const companyId = req.user?.companyId;
+            const oldOwner = await database_js_1.default.owner.findUnique({
+                where: { id },
+            });
             const owner = await database_js_1.default.owner.update({
                 where: companyId ? { id, companyId } : { id },
                 data: {
@@ -65,9 +83,49 @@ class OwnerController {
                     email,
                     phone,
                     payoutMethod,
-                    companyId,
                 },
             });
+            if (password && oldOwner) {
+                const passwordHash = await bcrypt_1.default.hash(password, 12);
+                const [first = '', ...lastParts] = resolvedName.split(' ');
+                const last = lastParts.join(' ') || 'Owner';
+                const existingUser = await database_js_1.default.user.findFirst({
+                    where: { email: oldOwner.email },
+                });
+                if (existingUser) {
+                    await database_js_1.default.user.update({
+                        where: { id: existingUser.id },
+                        data: {
+                            email,
+                            passwordHash,
+                            firstName: first || 'Owner',
+                            lastName: last,
+                            phone,
+                        },
+                    });
+                }
+                else {
+                    let role = await database_js_1.default.role.findUnique({
+                        where: { name: 'Owner' },
+                    });
+                    if (!role) {
+                        role = await database_js_1.default.role.findFirst();
+                    }
+                    if (role) {
+                        await database_js_1.default.user.create({
+                            data: {
+                                email,
+                                passwordHash,
+                                firstName: first || 'Owner',
+                                lastName: last,
+                                phone: phone || null,
+                                roleId: role.id,
+                                companyId,
+                            },
+                        });
+                    }
+                }
+            }
             return (0, apiResponse_js_1.sendSuccess)({ res, data: owner });
         }
         catch (error) {
