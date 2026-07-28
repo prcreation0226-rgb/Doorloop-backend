@@ -20,6 +20,10 @@ async function main() {
   await prisma.screeningReport.deleteMany({});
   await prisma.violation.deleteMany({});
   await prisma.invoice.deleteMany({});
+  await prisma.coAAccount.deleteMany({});
+  await prisma.bankAccount.deleteMany({});
+  await prisma.vendor.deleteMany({});
+  await prisma.application.deleteMany({});
   await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1;');
 
   // 1. Create Roles
@@ -472,7 +476,7 @@ async function main() {
 main()
   .catch((e) => {
     console.error('❌ Database Seeding Failed:', e);
-    process.exit(1);
+    (process as any).exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
