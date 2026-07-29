@@ -214,6 +214,53 @@ class ServiceRequestController {
                     ...(messagesData !== undefined && { messages: messagesData }),
                 },
             });
+            // Automatically generate Expense when Maintenance Service Request is marked Completed with a cost
+            if (request.status === 'Completed' && request.cost && request.cost > 0) {
+                const descSearch = `ID: ${request.id}`;
+                const existingExpense = await database_1.default.expense.findFirst({
+                    where: {
+                        description: {
+                            contains: descSearch,
+                        },
+                    },
+                });
+                if (!existingExpense) {
+                    await database_1.default.$transaction(async (tx) => {
+                        const expense = await tx.expense.create({
+                            data: {
+                                category: 'Maintenance',
+                                amount: request.cost || 0,
+                                date: new Date(),
+                                description: `Maintenance Request: ${request.title} (ID: ${request.id})`,
+                            },
+                        });
+                        // 1. Debit Maintenance Expense account: e.g. "5010" or first Account of type "Expense"
+                        const expenseAccount = await tx.coAAccount.findFirst({
+                            where: request.companyId
+                                ? { companyId: request.companyId, OR: [{ accountCode: '5010' }, { type: 'Expense' }] }
+                                : { OR: [{ accountCode: '5010' }, { type: 'Expense' }] }
+                        });
+                        if (expenseAccount) {
+                            await tx.coAAccount.update({
+                                where: { id: expenseAccount.id },
+                                data: { balance: { increment: expense.amount } }
+                            });
+                        }
+                        // 2. Credit Checking Account: e.g. "1010" or first Account of type "Asset"
+                        const checkingAccount = await tx.coAAccount.findFirst({
+                            where: request.companyId
+                                ? { companyId: request.companyId, OR: [{ accountCode: '1010' }, { type: 'Asset' }] }
+                                : { OR: [{ accountCode: '1010' }, { type: 'Asset' }] }
+                        });
+                        if (checkingAccount) {
+                            await tx.coAAccount.update({
+                                where: { id: checkingAccount.id },
+                                data: { balance: { decrement: expense.amount } }
+                            });
+                        }
+                    });
+                }
+            }
             return (0, apiResponse_1.sendSuccess)({ res, data: {
                     ...request,
                     messages: (() => {

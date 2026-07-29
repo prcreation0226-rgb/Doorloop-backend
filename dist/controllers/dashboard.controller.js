@@ -45,6 +45,9 @@ class DashboardController {
                 },
             });
             const pendingRent = unpaidPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+            // Sum of all recorded actual expenses from database (Expense does not have companyId)
+            const dbExpenses = await database_1.default.expense.findMany({});
+            const totalExpenses = dbExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
             // Open maintenance orders
             const openMaintenance = await database_1.default.workOrder.count({
                 where: {
@@ -71,7 +74,7 @@ class DashboardController {
                     occupancyRate,
                     monthlyRevenue: monthlyRevenue || (totalProperties > 0 ? 15000 : 0),
                     pendingRent: pendingRent || 0,
-                    expenses: totalProperties > 0 ? 4500 : 0,
+                    expenses: totalExpenses || (totalProperties > 0 ? 4500 : 0),
                     openMaintenance,
                     leasesExpiringSoon,
                 },
@@ -83,41 +86,84 @@ class DashboardController {
     }
     async getChartData(req, res, next) {
         try {
-            // Return beautiful DB-aggregated time series data with defaults for charts
+            const companyId = req.user?.companyId;
+            // Fetch all processed payments and expenses
+            const payments = await database_1.default.rentPayment.findMany({
+                where: {
+                    status: 'Paid',
+                    ...(companyId ? { companyId } : {}),
+                },
+            });
+            const expenses = await database_1.default.expense.findMany({});
+            // Get last 6 months labels
+            const months = [];
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            for (let i = 5; i >= 0; i--) {
+                const d = new Date();
+                d.setMonth(d.getMonth() - i);
+                months.push({
+                    month: monthNames[d.getMonth()],
+                    year: d.getFullYear(),
+                    monthNum: d.getMonth(),
+                });
+            }
+            // Group payments and expenses dynamically
+            const incomeVsExpenses = months.map((m) => {
+                const incomeSum = payments
+                    .filter((p) => {
+                    const date = new Date(p.paidDate || p.dueDate);
+                    return date.getMonth() === m.monthNum && date.getFullYear() === m.year;
+                })
+                    .reduce((sum, p) => sum + (p.amount || 0), 0);
+                const expenseSum = expenses
+                    .filter((e) => {
+                    const date = new Date(e.date || e.createdAt);
+                    return date.getMonth() === m.monthNum && date.getFullYear() === m.year;
+                })
+                    .reduce((sum, e) => sum + (e.amount || 0), 0);
+                // Pre-populate with realistic defaults for empty database
+                return {
+                    month: m.month,
+                    income: incomeSum || (m.monthNum % 2 === 0 ? 95000 : 80000),
+                    expenses: expenseSum || (m.monthNum % 2 === 0 ? 38000 : 32000),
+                };
+            });
+            let runningRevenue = 0;
+            const revenueGrowth = months.map((m) => {
+                const incomeSum = payments
+                    .filter((p) => {
+                    const date = new Date(p.paidDate || p.dueDate);
+                    return date.getMonth() === m.monthNum && date.getFullYear() === m.year;
+                })
+                    .reduce((sum, p) => sum + (p.amount || 0), 0);
+                runningRevenue += incomeSum;
+                return {
+                    month: m.month,
+                    revenue: runningRevenue || (m.monthNum === 0 ? 95000 : 95000 + m.monthNum * 3000),
+                };
+            });
+            const maintenanceAnalytics = [
+                { name: 'Electrical', value: 12 },
+                { name: 'Plumbing', value: 18 },
+                { name: 'HVAC', value: 8 },
+                { name: 'Appliances', value: 15 },
+                { name: 'Other', value: 5 },
+            ];
+            const occupancyTrend = [
+                { month: 'Jan', rate: 88 },
+                { month: 'Feb', rate: 89 },
+                { month: 'Mar', rate: 91 },
+                { month: 'Apr', rate: 91 },
+                { month: 'May', rate: 92 },
+                { month: 'Jun', rate: 93 },
+            ];
             return (0, apiResponse_1.sendSuccess)({
                 res,
                 data: {
-                    revenueGrowth: [
-                        { month: 'Jan', revenue: 95000 },
-                        { month: 'Feb', revenue: 98000 },
-                        { month: 'Mar', revenue: 102000 },
-                        { month: 'Apr', revenue: 105000 },
-                        { month: 'May', revenue: 112000 },
-                        { month: 'Jun', revenue: 120000 },
-                    ],
-                    maintenanceAnalytics: [
-                        { name: 'Electrical', value: 12 },
-                        { name: 'Plumbing', value: 18 },
-                        { name: 'HVAC', value: 8 },
-                        { name: 'Appliances', value: 15 },
-                        { name: 'Other', value: 5 },
-                    ],
-                    incomeVsExpenses: [
-                        { month: 'Jan', income: 95000, expenses: 38000 },
-                        { month: 'Feb', income: 98000, expenses: 40000 },
-                        { month: 'Mar', income: 102000, expenses: 41000 },
-                        { month: 'Apr', income: 105000, expenses: 42000 },
-                        { month: 'May', income: 112000, expenses: 43000 },
-                        { month: 'Jun', income: 120000, expenses: 45000 },
-                    ],
-                    occupancyTrend: [
-                        { month: 'Jan', rate: 88 },
-                        { month: 'Feb', rate: 89 },
-                        { month: 'Mar', rate: 91 },
-                        { month: 'Apr', rate: 91 },
-                        { month: 'May', rate: 92 },
-                        { month: 'Jun', rate: 93 },
-                    ],
+                    revenueGrowth,
+                    maintenanceAnalytics,
+                    incomeVsExpenses,
+                    occupancyTrend,
                 },
             });
         }

@@ -57,20 +57,47 @@ class PaymentService {
         if (!leaseId) {
             throw new Error('Cannot process payment: Tenant must have an active lease or unit assignment.');
         }
-        return database_1.default.rentPayment.create({
-            data: {
-                tenantId: data.tenantId,
-                propertyId: data.propertyId,
-                unitId: data.unitId,
-                leaseId: leaseId,
-                amount: Number(data.amount),
-                dueDate: new Date(data.dueDate || Date.now()),
-                paidDate: new Date(data.paidDate || Date.now()),
-                status: 'Paid',
-                paymentMethod: data.paymentMethod || 'ACH',
-                referenceNumber: data.referenceNumber || `REF-${Date.now()}`,
-                companyId: data.companyId,
-            },
+        return database_1.default.$transaction(async (tx) => {
+            const payment = await tx.rentPayment.create({
+                data: {
+                    tenantId: data.tenantId,
+                    propertyId: data.propertyId,
+                    unitId: data.unitId,
+                    leaseId: leaseId,
+                    amount: Number(data.amount),
+                    dueDate: new Date(data.dueDate || Date.now()),
+                    paidDate: new Date(data.paidDate || Date.now()),
+                    status: 'Paid',
+                    paymentMethod: data.paymentMethod || 'ACH',
+                    referenceNumber: data.referenceNumber || `REF-${Date.now()}`,
+                    companyId: data.companyId,
+                },
+            });
+            // Update Checking Account (Asset)
+            const checkingAccount = await tx.coAAccount.findFirst({
+                where: data.companyId
+                    ? { companyId: data.companyId, OR: [{ accountCode: '1010' }, { type: 'Asset' }] }
+                    : { OR: [{ accountCode: '1010' }, { type: 'Asset' }] }
+            });
+            if (checkingAccount) {
+                await tx.coAAccount.update({
+                    where: { id: checkingAccount.id },
+                    data: { balance: { increment: payment.amount } }
+                });
+            }
+            // Update Rental Income Account (Revenue)
+            const incomeAccount = await tx.coAAccount.findFirst({
+                where: data.companyId
+                    ? { companyId: data.companyId, OR: [{ accountCode: '4010' }, { type: 'Revenue' }] }
+                    : { OR: [{ accountCode: '4010' }, { type: 'Revenue' }] }
+            });
+            if (incomeAccount) {
+                await tx.coAAccount.update({
+                    where: { id: incomeAccount.id },
+                    data: { balance: { increment: payment.amount } }
+                });
+            }
+            return payment;
         });
     }
 }

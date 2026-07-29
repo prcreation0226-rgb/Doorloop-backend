@@ -65,7 +65,11 @@ class SuperAdminController {
     }
     async createCompanyUser(req, res, next) {
         try {
-            const user = await superadmin_service_1.superAdminService.createCompanyUser(req.body);
+            const companyId = req.user?.companyId;
+            const user = await superadmin_service_1.superAdminService.createCompanyUser({
+                ...req.body,
+                companyId: req.body.companyId || companyId,
+            });
             return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: user });
         }
         catch (error) {

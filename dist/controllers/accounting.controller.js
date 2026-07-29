@@ -17,7 +17,18 @@ class AccountingController {
     async createAccount(req, res, next) {
         try {
             const companyId = req.user?.companyId;
-            const account = await accounting_service_1.accountingService.createAccount(req.body, companyId);
+            const { accountNumber, accountCode, accountName, accountType, type, balance } = req.body;
+            const mappedType = type || (accountType === 'Assets' ? 'Asset' :
+                accountType === 'Liabilities' ? 'Liability' :
+                    accountType === 'Equity' ? 'Equity' :
+                        accountType === 'Income' ? 'Revenue' :
+                            accountType === 'Expenses' ? 'Expense' : 'Asset');
+            const account = await accounting_service_1.accountingService.createAccount({
+                accountCode: accountCode || accountNumber || `ACC-${Date.now()}`,
+                accountName: accountName || 'Unnamed Account',
+                type: mappedType,
+                balance: balance ? parseFloat(balance) : 0,
+            }, companyId);
             return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: account });
         }
         catch (error) {

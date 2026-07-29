@@ -1496,13 +1496,42 @@ class PortalController {
     async createExpense(req, res, next) {
         try {
             const { category, amount, date, description } = req.body;
-            const expense = await database_1.default.expense.create({
-                data: {
-                    category,
-                    amount: parseFloat(amount || '0'),
-                    date: new Date(date || Date.now()),
-                    description: description || '',
-                },
+            const parsedAmount = parseFloat(amount || '0');
+            const companyId = req.user?.companyId;
+            const expense = await database_1.default.$transaction(async (tx) => {
+                const exp = await tx.expense.create({
+                    data: {
+                        category,
+                        amount: parsedAmount,
+                        date: new Date(date || Date.now()),
+                        description: description || '',
+                    },
+                });
+                // 1. Debit (Increase) Expense account: e.g. "5010" or first Account of type "Expense"
+                const expenseAccount = await tx.coAAccount.findFirst({
+                    where: companyId
+                        ? { companyId, OR: [{ accountCode: '5010' }, { type: 'Expense' }] }
+                        : { OR: [{ accountCode: '5010' }, { type: 'Expense' }] }
+                });
+                if (expenseAccount) {
+                    await tx.coAAccount.update({
+                        where: { id: expenseAccount.id },
+                        data: { balance: { increment: parsedAmount } }
+                    });
+                }
+                // 2. Credit (Decrease) Checking Account: e.g. "1010" or first Account of type "Asset"
+                const checkingAccount = await tx.coAAccount.findFirst({
+                    where: companyId
+                        ? { companyId, OR: [{ accountCode: '1010' }, { type: 'Asset' }] }
+                        : { OR: [{ accountCode: '1010' }, { type: 'Asset' }] }
+                });
+                if (checkingAccount) {
+                    await tx.coAAccount.update({
+                        where: { id: checkingAccount.id },
+                        data: { balance: { decrement: parsedAmount } }
+                    });
+                }
+                return exp;
             });
             return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: expense });
         }
@@ -1690,11 +1719,27 @@ class PortalController {
     }
     async createSignature(req, res, next) {
         try {
-            const { documentName, documentId, recipientName, recipientEmail, expiresAt } = req.body;
+            const { documentName, documentId, expiresAt, signers } = req.body;
+            let recipientName = req.body.recipientName;
+            let recipientEmail = req.body.recipientEmail;
+            if (!recipientName) {
+                if (Array.isArray(signers) && signers.length > 0) {
+                    recipientName = signers[0];
+                }
+                else if (typeof signers === 'string' && signers.trim()) {
+                    recipientName = signers.trim();
+                }
+                else {
+                    recipientName = 'Tenant / Signer';
+                }
+            }
+            if (!recipientEmail) {
+                recipientEmail = req.body.signerEmail || req.body.email || 'signer@example.com';
+            }
             const signature = await database_1.default.signature.create({
                 data: {
-                    documentName,
-                    documentId,
+                    documentName: documentName || 'Document.pdf',
+                    documentId: documentId || `doc-${Date.now()}`,
                     recipientName,
                     recipientEmail,
                     status: 'Sent',

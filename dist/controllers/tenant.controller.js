@@ -62,7 +62,7 @@ class TenantController {
                     companyId,
                 },
             });
-            if (password) {
+            if (password && email) {
                 let role = await database_js_1.default.role.findUnique({
                     where: { name: 'Tenant' },
                 });
@@ -71,17 +71,33 @@ class TenantController {
                 }
                 if (role) {
                     const passwordHash = await bcrypt_1.default.hash(password, 12);
-                    await database_js_1.default.user.create({
-                        data: {
-                            email,
-                            passwordHash,
-                            firstName: firstName || 'Tenant',
-                            lastName: lastName || 'User',
-                            phone: phone || null,
-                            roleId: role.id,
-                            companyId,
-                        },
+                    const existingUser = await database_js_1.default.user.findFirst({
+                        where: { email },
                     });
+                    if (existingUser) {
+                        await database_js_1.default.user.update({
+                            where: { id: existingUser.id },
+                            data: {
+                                passwordHash,
+                                firstName: firstName || 'Tenant',
+                                lastName: lastName || 'User',
+                                phone: phone || null,
+                            },
+                        });
+                    }
+                    else {
+                        await database_js_1.default.user.create({
+                            data: {
+                                email,
+                                passwordHash,
+                                firstName: firstName || 'Tenant',
+                                lastName: lastName || 'User',
+                                phone: phone || null,
+                                roleId: role.id,
+                                companyId,
+                            },
+                        });
+                    }
                 }
             }
             return (0, apiResponse_js_1.sendSuccess)({ res, statusCode: 201, data: tenant });
