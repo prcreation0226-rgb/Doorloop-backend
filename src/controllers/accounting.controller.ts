@@ -17,7 +17,23 @@ export class AccountingController {
   async createAccount(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const companyId = req.user?.companyId;
-      const account = await accountingService.createAccount(req.body, companyId);
+      const { accountNumber, accountCode, accountName, accountType, type, balance } = req.body;
+      
+      const mappedType = type || (
+        accountType === 'Assets' ? 'Asset' :
+        accountType === 'Liabilities' ? 'Liability' :
+        accountType === 'Equity' ? 'Equity' :
+        accountType === 'Income' ? 'Revenue' :
+        accountType === 'Expenses' ? 'Expense' : 'Asset'
+      );
+
+      const account = await accountingService.createAccount({
+        accountCode: accountCode || accountNumber || `ACC-${Date.now()}`,
+        accountName: accountName || 'Unnamed Account',
+        type: mappedType,
+        balance: balance ? parseFloat(balance) : 0,
+      }, companyId);
+      
       return sendSuccess({ res, statusCode: 201, data: account });
     } catch (error) {
       next(error);

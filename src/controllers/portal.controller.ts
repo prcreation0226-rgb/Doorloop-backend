@@ -1566,14 +1566,48 @@ export class PortalController {
   async createExpense(req: Request, res: Response, next: NextFunction) {
     try {
       const { category, amount, date, description } = req.body;
-      const expense = await prisma.expense.create({
-        data: {
-          category,
-          amount: parseFloat(amount || '0'),
-          date: new Date(date || Date.now()),
-          description: description || '',
-        },
+      const parsedAmount = parseFloat(amount || '0');
+      const companyId = (req as AuthenticatedRequest).user?.companyId;
+
+      const expense = await prisma.$transaction(async (tx) => {
+        const exp = await tx.expense.create({
+          data: {
+            category,
+            amount: parsedAmount,
+            date: new Date(date || Date.now()),
+            description: description || '',
+          },
+        });
+
+        // 1. Debit (Increase) Expense account: e.g. "5010" or first Account of type "Expense"
+        const expenseAccount = await tx.coAAccount.findFirst({
+          where: companyId
+            ? { companyId, OR: [{ accountCode: '5010' }, { type: 'Expense' }] }
+            : { OR: [{ accountCode: '5010' }, { type: 'Expense' }] }
+        });
+        if (expenseAccount) {
+          await tx.coAAccount.update({
+            where: { id: expenseAccount.id },
+            data: { balance: { increment: parsedAmount } }
+          });
+        }
+
+        // 2. Credit (Decrease) Checking Account: e.g. "1010" or first Account of type "Asset"
+        const checkingAccount = await tx.coAAccount.findFirst({
+          where: companyId
+            ? { companyId, OR: [{ accountCode: '1010' }, { type: 'Asset' }] }
+            : { OR: [{ accountCode: '1010' }, { type: 'Asset' }] }
+        });
+        if (checkingAccount) {
+          await tx.coAAccount.update({
+            where: { id: checkingAccount.id },
+            data: { balance: { decrement: parsedAmount } }
+          });
+        }
+
+        return exp;
       });
+
       return sendSuccess({ res, statusCode: 201, data: expense });
     } catch (error) {
       next(error);

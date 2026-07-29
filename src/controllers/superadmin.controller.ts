@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { superAdminService } from '../services/superadmin.service';
 import { sendSuccess } from '../utils/apiResponse';
+import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 
 export class SuperAdminController {
   // Companies
@@ -64,7 +65,11 @@ export class SuperAdminController {
 
   async createCompanyUser(req: Request, res: Response, next: NextFunction) {
     try {
-      const user = await superAdminService.createCompanyUser(req.body);
+      const companyId = (req as AuthenticatedRequest).user?.companyId;
+      const user = await superAdminService.createCompanyUser({
+        ...req.body,
+        companyId: req.body.companyId || companyId,
+      });
       return sendSuccess({ res, statusCode: 201, data: user });
     } catch (error) {
       next(error);
