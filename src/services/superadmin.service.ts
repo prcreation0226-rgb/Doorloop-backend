@@ -134,6 +134,27 @@ export class SuperAdminService {
           status: 'Active',
         },
       });
+
+      // Automatically create matching Vendor record if the role is Maintenance Staff or Maintenance
+      if (roleName === 'Maintenance Staff' || roleName === 'Maintenance') {
+        const existingVendor = await prisma.vendor.findFirst({
+          where: { email: data.email },
+        });
+
+        if (!existingVendor) {
+          await prisma.vendor.create({
+            data: {
+              companyName: data.name,
+              contactName: data.name,
+              email: data.email,
+              phone: data.phone || '',
+              serviceType: 'General Maintenance',
+              rating: 5.0,
+              companyId: finalCompanyId,
+            },
+          });
+        }
+      }
     }
 
     return companyUser;

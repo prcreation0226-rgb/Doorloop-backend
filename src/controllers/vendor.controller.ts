@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import prisma from '../config/database';
 import { sendSuccess } from '../utils/apiResponse';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
+import bcrypt from 'bcrypt';
 
 export class VendorController {
   async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -21,8 +22,9 @@ export class VendorController {
 
   async create(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const { companyName, contactName, email, phone, serviceType, rating } = req.body;
+      const { companyName, contactName, email, phone, serviceType, rating, password } = req.body;
       const companyId = req.user?.companyId;
+      
       const vendor = await prisma.vendor.create({
         data: {
           companyName,
@@ -34,6 +36,38 @@ export class VendorController {
           companyId,
         },
       });
+
+      // Automatically create matching login user for this vendor (Maintenance Staff role)
+      if (email) {
+        const roleObj = await prisma.role.findFirst({
+          where: { name: 'Maintenance Staff' },
+        });
+
+        if (roleObj) {
+          const existingUser = await prisma.user.findUnique({
+            where: { email },
+          });
+
+          if (!existingUser) {
+            const passwordHash = await bcrypt.hash(password || 'vendor123', 12);
+            const nameParts = (contactName || companyName || 'Vendor').trim().split(/\s+/);
+            const firstName = nameParts[0] || 'Vendor';
+            const lastName = nameParts.slice(1).join(' ') || 'Partner';
+
+            await prisma.user.create({
+              data: {
+                email,
+                passwordHash,
+                firstName,
+                lastName,
+                phone: phone || '',
+                roleId: roleObj.id,
+                companyId,
+                status: 'Active',
+              },
+            });
+          }
+        }
       return sendSuccess({ res, statusCode: 201, data: vendor });
     } catch (error) {
       next(error);
