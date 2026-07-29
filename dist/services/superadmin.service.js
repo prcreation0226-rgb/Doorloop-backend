@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.superAdminService = exports.SuperAdminService = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const database_1 = __importDefault(require("../config/database"));
+const companyHelper_1 = require("../utils/companyHelper");
 class SuperAdminService {
     // Companies Directory
     async getCompanies() {
@@ -73,24 +74,25 @@ class SuperAdminService {
             where: { id },
         });
     }
-    // Company Users
     async getCompanyUsers() {
-        return database_1.default.companyUser.findMany({
+        const companyUsers = await database_1.default.companyUser.findMany({
             include: { company: true },
             orderBy: { createdAt: 'desc' },
         });
+        const emails = companyUsers.map((u) => u.email).filter(Boolean);
+        const vendors = await database_1.default.vendor.findMany({
+            where: { email: { in: emails } },
+        });
+        return companyUsers.map((u) => {
+            const matched = vendors.find((v) => v.email === u.email);
+            return {
+                ...u,
+                serviceType: matched ? matched.serviceType : undefined,
+            };
+        });
     }
     async createCompanyUser(data) {
-        let finalCompanyId = data.companyId;
-        if (!finalCompanyId) {
-            const firstCompany = await database_1.default.company.findFirst();
-            if (firstCompany) {
-                finalCompanyId = firstCompany.id;
-            }
-        }
-        if (!finalCompanyId) {
-            throw new Error("No company exists in the database. Please create a company first.");
-        }
+        let finalCompanyId = await (0, companyHelper_1.getManagerCompanyId)(undefined, data.companyId);
         // 1. Create companyUser record
         const companyUser = await database_1.default.companyUser.create({
             data: {
@@ -124,6 +126,25 @@ class SuperAdminService {
                     status: 'Active',
                 },
             });
+            // Automatically create matching Vendor record if the role is Maintenance Staff or Maintenance
+            if (roleName === 'Maintenance Staff' || roleName === 'Maintenance') {
+                const existingVendor = await database_1.default.vendor.findFirst({
+                    where: { email: data.email },
+                });
+                if (!existingVendor) {
+                    await database_1.default.vendor.create({
+                        data: {
+                            companyName: data.name,
+                            contactName: data.name,
+                            email: data.email,
+                            phone: data.phone || '',
+                            serviceType: data.serviceType || 'General Maintenance',
+                            rating: 5.0,
+                            companyId: finalCompanyId,
+                        },
+                    });
+                }
+            }
         }
         return companyUser;
     }

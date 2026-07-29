@@ -7,6 +7,7 @@ exports.propertyService = exports.PropertyService = void 0;
 const database_1 = __importDefault(require("../config/database"));
 const appError_1 = require("../utils/appError");
 const cloudinary_1 = __importDefault(require("../config/cloudinary"));
+const companyHelper_1 = require("../utils/companyHelper");
 class PropertyService {
     async getAllProperties(companyId, user) {
         let whereClause = companyId ? { companyId } : {};
@@ -44,6 +45,7 @@ class PropertyService {
         return prop;
     }
     async createProperty(data, file) {
+        const companyId = await (0, companyHelper_1.getManagerCompanyId)(undefined, data.companyId);
         let ownerId = data.ownerId;
         let ownerExists = false;
         if (ownerId) {
@@ -61,7 +63,7 @@ class PropertyService {
         }
         if (!ownerExists) {
             const firstOwner = await database_1.default.owner.findFirst({
-                where: data.companyId ? { companyId: data.companyId } : {},
+                where: companyId ? { companyId } : {},
             });
             if (firstOwner) {
                 ownerId = firstOwner.id;
@@ -72,7 +74,7 @@ class PropertyService {
                         name: 'Default Owner',
                         email: `default.owner.${Date.now()}@example.com`,
                         phone: '555-0100',
-                        companyId: data.companyId,
+                        companyId,
                     }
                 });
                 ownerId = defaultOwner.id;

@@ -7,6 +7,7 @@ exports.ownerController = exports.OwnerController = void 0;
 const database_js_1 = __importDefault(require("../config/database.js"));
 const apiResponse_js_1 = require("../utils/apiResponse.js");
 const bcrypt_1 = __importDefault(require("bcrypt"));
+const companyHelper_js_1 = require("../utils/companyHelper.js");
 class OwnerController {
     async getAll(req, res, next) {
         try {
@@ -27,7 +28,7 @@ class OwnerController {
         try {
             const { name, firstName, lastName, email, phone, payoutMethod, password, propertiesOwned } = req.body;
             const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
-            const companyId = req.user?.companyId;
+            const companyId = await (0, companyHelper_js_1.getManagerCompanyId)(req, req.body.companyId || req.user?.companyId);
             const owner = await database_js_1.default.owner.create({
                 data: {
                     name: resolvedName,

@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.vendorController = exports.VendorController = void 0;
 const database_1 = __importDefault(require("../config/database"));
 const apiResponse_1 = require("../utils/apiResponse");
+const bcrypt_1 = __importDefault(require("bcrypt"));
+const companyHelper_1 = require("../utils/companyHelper");
 class VendorController {
     async getAll(req, res, next) {
         try {
@@ -16,7 +18,22 @@ class VendorController {
                     workOrders: true,
                 },
             });
-            return (0, apiResponse_1.sendSuccess)({ res, data: vendors });
+            // Fetch matching login users to attach their status
+            const emails = vendors.map((v) => v.email).filter(Boolean);
+            const matchedUsers = await database_1.default.user.findMany({
+                where: {
+                    email: { in: emails },
+                    companyId: companyId || undefined,
+                },
+            });
+            const vendorsWithStatus = vendors.map((v) => {
+                const userRec = matchedUsers.find((u) => u.email === v.email);
+                return {
+                    ...v,
+                    status: userRec ? userRec.status : 'Active',
+                };
+            });
+            return (0, apiResponse_1.sendSuccess)({ res, data: vendorsWithStatus });
         }
         catch (error) {
             next(error);
@@ -24,8 +41,8 @@ class VendorController {
     }
     async create(req, res, next) {
         try {
-            const { companyName, contactName, email, phone, serviceType, rating } = req.body;
-            const companyId = req.user?.companyId;
+            const { companyName, contactName, email, phone, serviceType, rating, password } = req.body;
+            const companyId = await (0, companyHelper_1.getManagerCompanyId)(req, req.body.companyId || req.user?.companyId);
             const vendor = await database_1.default.vendor.create({
                 data: {
                     companyName,
@@ -37,6 +54,40 @@ class VendorController {
                     companyId,
                 },
             });
+            // Automatically create matching login user for this vendor (Maintenance Staff role)
+            if (email) {
+                const roleObj = await database_1.default.role.findFirst({
+                    where: { name: 'Maintenance Staff' },
+                });
+                if (roleObj) {
+                    const existingUser = await database_1.default.user.findUnique({
+                        where: { email },
+                    });
+                    if (!existingUser) {
+                        const passwordHash = await bcrypt_1.default.hash(password || 'vendor123', 12);
+                        const nameParts = (contactName || companyName || 'Vendor').trim().split(/\s+/);
+                        const firstName = nameParts[0] || 'Vendor';
+                        const lastName = nameParts.slice(1).join(' ') || 'Partner';
+                        await database_1.default.user.create({
+                            data: {
+                                email,
+                                passwordHash,
+                                firstName,
+                                lastName,
+                                phone: phone || '',
+                                roleId: roleObj.id,
+                                companyId,
+                            },
+                        });
+                    }
+                    else if (!existingUser.companyId) {
+                        await database_1.default.user.update({
+                            where: { id: existingUser.id },
+                            data: { companyId },
+                        });
+                    }
+                }
+            }
             return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: vendor });
         }
         catch (error) {

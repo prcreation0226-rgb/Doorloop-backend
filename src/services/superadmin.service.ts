@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import prisma from '../config/database';
+import { getManagerCompanyId } from '../utils/companyHelper';
 
 export class SuperAdminService {
   // Companies Directory
@@ -98,17 +99,7 @@ export class SuperAdminService {
   }
 
   async createCompanyUser(data: { companyId?: string; name: string; email: string; role?: string; phone?: string; password?: string; serviceType?: string }) {
-    let finalCompanyId = data.companyId;
-    if (!finalCompanyId) {
-      const firstCompany = await prisma.company.findFirst();
-      if (firstCompany) {
-        finalCompanyId = firstCompany.id;
-      }
-    }
-
-    if (!finalCompanyId) {
-      throw new Error("No company exists in the database. Please create a company first.");
-    }
+    let finalCompanyId = await getManagerCompanyId(undefined, data.companyId);
 
     // 1. Create companyUser record
     const companyUser = await prisma.companyUser.create({

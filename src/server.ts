@@ -2,6 +2,7 @@ import app from './app';
 import { env } from './config/env';
 import { logger } from './config/logger';
 import prisma from './config/database';
+import { autoHealMissingCompanyIds } from './utils/companyHelper.js';
 
 async function bootstrapDb() {
   try {
@@ -49,6 +50,7 @@ prisma.$connect()
   .then(async () => {
     logger.info('🔌 MySQL Database connected successfully via Prisma Client!');
     await bootstrapDb();
+    await autoHealMissingCompanyIds();
   })
   .catch((error: Error) => {
     logger.error(error, '❌ Failed to connect to the MySQL database:');

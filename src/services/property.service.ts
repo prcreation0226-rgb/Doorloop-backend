@@ -1,6 +1,7 @@
 import prisma from '../config/database';
 import { AppError } from '../utils/appError';
 import cloudinary from '../config/cloudinary';
+import { getManagerCompanyId } from '../utils/companyHelper';
 
 export class PropertyService {
   async getAllProperties(companyId?: string, user?: any) {
@@ -36,12 +37,12 @@ export class PropertyService {
         units: true,
       },
     });
-
     if (!prop) throw new AppError('Property not found.', 404, 'NOT_FOUND');
     return prop;
   }
 
   async createProperty(data: any, file?: any) {
+    const companyId = await getManagerCompanyId(undefined, data.companyId);
     let ownerId = data.ownerId;
     let ownerExists = false;
 
@@ -60,7 +61,7 @@ export class PropertyService {
 
     if (!ownerExists) {
       const firstOwner = await prisma.owner.findFirst({
-        where: data.companyId ? { companyId: data.companyId } : {},
+        where: companyId ? { companyId } : {},
       });
       if (firstOwner) {
         ownerId = firstOwner.id;
@@ -70,7 +71,7 @@ export class PropertyService {
             name: 'Default Owner',
             email: `default.owner.${Date.now()}@example.com`,
             phone: '555-0100',
-            companyId: data.companyId,
+            companyId,
           }
         });
         ownerId = defaultOwner.id;

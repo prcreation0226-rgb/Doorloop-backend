@@ -5,6 +5,7 @@ import { AuthenticatedRequest } from '../middlewares/auth.middleware.js';
 import { AppError } from '../utils/appError.js';
 import bcrypt from 'bcrypt';
 import cloudinary from '../config/cloudinary.js';
+import { getManagerCompanyId } from '../utils/companyHelper.js';
 
 export class TenantController {
   async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -29,7 +30,7 @@ export class TenantController {
   async create(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const { firstName, lastName, email, phone, unitId, status, password } = req.body;
-      const companyId = req.user?.companyId;
+      const companyId = await getManagerCompanyId(req, req.body.companyId || req.user?.companyId);
       const file = req.file;
 
       let imageUrl = null;

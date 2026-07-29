@@ -3,6 +3,7 @@ import prisma from '../config/database';
 import { sendSuccess } from '../utils/apiResponse';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import bcrypt from 'bcrypt';
+import { getManagerCompanyId } from '../utils/companyHelper';
 
 export class VendorController {
   async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -41,7 +42,7 @@ export class VendorController {
   async create(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const { companyName, contactName, email, phone, serviceType, rating, password } = req.body;
-      const companyId = req.user?.companyId;
+      const companyId = await getManagerCompanyId(req, req.body.companyId || req.user?.companyId);
       
       const vendor = await prisma.vendor.create({
         data: {
@@ -80,7 +81,13 @@ export class VendorController {
                 lastName,
                 phone: phone || '',
                 roleId: roleObj.id,
+                companyId,
               },
+            });
+          } else if (!existingUser.companyId) {
+            await prisma.user.update({
+              where: { id: existingUser.id },
+              data: { companyId },
             });
           }
         }

@@ -7,6 +7,7 @@ const app_1 = __importDefault(require("./app"));
 const env_1 = require("./config/env");
 const logger_1 = require("./config/logger");
 const database_1 = __importDefault(require("./config/database"));
+const companyHelper_js_1 = require("./utils/companyHelper.js");
 async function bootstrapDb() {
     try {
         logger_1.logger.info('⚙️ Bootstrapping database schema with new columns...');
@@ -48,6 +49,7 @@ database_1.default.$connect()
     .then(async () => {
     logger_1.logger.info('🔌 MySQL Database connected successfully via Prisma Client!');
     await bootstrapDb();
+    await (0, companyHelper_js_1.autoHealMissingCompanyIds)();
 })
     .catch((error) => {
     logger_1.logger.error(error, '❌ Failed to connect to the MySQL database:');

@@ -9,6 +9,7 @@ const apiResponse_js_1 = require("../utils/apiResponse.js");
 const appError_js_1 = require("../utils/appError.js");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const cloudinary_js_1 = __importDefault(require("../config/cloudinary.js"));
+const companyHelper_js_1 = require("../utils/companyHelper.js");
 class TenantController {
     async getAll(req, res, next) {
         try {
@@ -32,7 +33,7 @@ class TenantController {
     async create(req, res, next) {
         try {
             const { firstName, lastName, email, phone, unitId, status, password } = req.body;
-            const companyId = req.user?.companyId;
+            const companyId = await (0, companyHelper_js_1.getManagerCompanyId)(req, req.body.companyId || req.user?.companyId);
             const file = req.file;
             let imageUrl = null;
             if (file) {

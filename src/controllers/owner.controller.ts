@@ -3,6 +3,7 @@ import prisma from '../config/database.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware.js';
 import bcrypt from 'bcrypt';
+import { getManagerCompanyId } from '../utils/companyHelper.js';
 
 export class OwnerController {
   async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -24,7 +25,7 @@ export class OwnerController {
     try {
       const { name, firstName, lastName, email, phone, payoutMethod, password, propertiesOwned } = req.body;
       const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
-      const companyId = req.user?.companyId;
+      const companyId = await getManagerCompanyId(req, req.body.companyId || req.user?.companyId);
       const owner = await prisma.owner.create({
         data: {
           name: resolvedName,
