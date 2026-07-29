@@ -791,6 +791,9 @@ model OwnerDocument {
   size       String   @default("1.2 MB")
   uploadedAt DateTime @default(now())
   fileUrl    String?
+  ownerId    String?
+  propertyId String?
+  companyId  String?
 
   @@map("owner_documents")
 }
@@ -813,6 +816,11 @@ model TenantDocument {
   size       String   @default("1.5 MB")
   uploadedAt DateTime @default(now())
   fileUrl    String?
+  tenantId   String?
+  propertyId String?
+  buildingId String?
+  unitId     String?
+  companyId  String?
 
   @@map("tenant_documents")
 }

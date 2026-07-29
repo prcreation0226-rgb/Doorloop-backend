@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const inspection_controller_1 = require("../controllers/inspection.controller");
+const router = (0, express_1.Router)();
+router.get('/inspectors', (req, res, next) => inspection_controller_1.inspectionController.getInspectors(req, res, next));
+router.get('/:id', (req, res, next) => inspection_controller_1.inspectionController.getById(req, res, next));
+router.put('/:id', (req, res, next) => inspection_controller_1.inspectionController.update(req, res, next));
+router.post('/:id/complete', (req, res, next) => inspection_controller_1.inspectionController.complete(req, res, next));
+router.post('/:id/reopen', (req, res, next) => inspection_controller_1.inspectionController.reopen(req, res, next));
+exports.default = router;

@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const inspectionTemplate_controller_1 = require("../controllers/inspectionTemplate.controller");
+const router = (0, express_1.Router)();
+router.get('/', (req, res, next) => inspectionTemplate_controller_1.inspectionTemplateController.getAll(req, res, next));
+router.get('/:id', (req, res, next) => inspectionTemplate_controller_1.inspectionTemplateController.getById(req, res, next));
+router.post('/', (req, res, next) => inspectionTemplate_controller_1.inspectionTemplateController.create(req, res, next));
+router.put('/:id', (req, res, next) => inspectionTemplate_controller_1.inspectionTemplateController.update(req, res, next));
+router.put('/:id/active', (req, res, next) => inspectionTemplate_controller_1.inspectionTemplateController.toggleActive(req, res, next));
+router.post('/:id/duplicate', (req, res, next) => inspectionTemplate_controller_1.inspectionTemplateController.duplicate(req, res, next));
+router.post('/rooms/:id/duplicate', (req, res, next) => inspectionTemplate_controller_1.inspectionTemplateController.duplicateRoom(req, res, next));
+exports.default = router;

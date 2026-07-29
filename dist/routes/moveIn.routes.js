@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const moveIn_controller_1 = require("../controllers/moveIn.controller");
+const router = (0, express_1.Router)();
+router.get('/', (req, res, next) => moveIn_controller_1.moveInController.getAll(req, res, next));
+router.get('/:id', (req, res, next) => moveIn_controller_1.moveInController.getById(req, res, next));
+router.post('/', (req, res, next) => moveIn_controller_1.moveInController.create(req, res, next));
+router.put('/:id', (req, res, next) => moveIn_controller_1.moveInController.update(req, res, next));
+router.post('/:id/start-inspection', (req, res, next) => moveIn_controller_1.moveInController.startInspection(req, res, next));
+router.post('/:id/complete', (req, res, next) => moveIn_controller_1.moveInController.completeMoveIn(req, res, next));
+exports.default = router;

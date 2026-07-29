@@ -15,3 +15,30 @@ export const upload = multer({
     }
   },
 });
+
+export const uploadDocument = multer({
+  storage,
+  limits: {
+    fileSize: 1 * 1024 * 1024, // 1 MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimeTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/plain'
+    ];
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type! Only images, PDF, Word, and Excel files up to 1 MB are allowed.'));
+    }
+  },
+});
+

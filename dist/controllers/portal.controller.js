@@ -1580,7 +1580,7 @@ class PortalController {
     async getInspections(req, res, next) {
         try {
             const inspections = await database_1.default.inspection.findMany({
-                orderBy: { date: 'asc' },
+                orderBy: { startedAt: 'asc' },
             });
             return (0, apiResponse_1.sendSuccess)({ res, data: inspections });
         }
@@ -1590,14 +1590,16 @@ class PortalController {
     }
     async createInspection(req, res, next) {
         try {
-            const { propertyName, unitNumber, inspector, status, date } = req.body;
+            const { status, date } = req.body;
+            const count = await database_1.default.inspection.count();
+            const formattedCount = String(count + 1).padStart(6, '0');
             const inspection = await database_1.default.inspection.create({
                 data: {
-                    propertyName,
-                    unitNumber,
-                    inspector,
-                    status: status || 'Scheduled',
-                    date: date ? new Date(date) : new Date(),
+                    inspectionNumber: `MI-${formattedCount}`,
+                    status: status || 'DRAFT',
+                    startedAt: date ? new Date(date) : new Date(),
+                    templateName: 'Standard Template',
+                    templateVersion: 1,
                 },
             });
             return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: inspection });
@@ -1608,13 +1610,12 @@ class PortalController {
     }
     async updateInspection(req, res, next) {
         try {
-            const { status, date, inspector } = req.body;
+            const { status, date } = req.body;
             const inspection = await database_1.default.inspection.update({
                 where: { id: req.params.id },
                 data: {
-                    status,
-                    date: date ? new Date(date) : undefined,
-                    inspector,
+                    status: status,
+                    startedAt: date ? new Date(date) : undefined,
                 },
             });
             return (0, apiResponse_1.sendSuccess)({ res, data: inspection });

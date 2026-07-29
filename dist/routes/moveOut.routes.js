@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const moveOut_controller_1 = require("../controllers/moveOut.controller");
+const router = (0, express_1.Router)();
+router.get('/', (req, res, next) => moveOut_controller_1.moveOutController.getAll(req, res, next));
+router.get('/:id', (req, res, next) => moveOut_controller_1.moveOutController.getById(req, res, next));
+router.post('/', (req, res, next) => moveOut_controller_1.moveOutController.create(req, res, next));
+router.put('/:id', (req, res, next) => moveOut_controller_1.moveOutController.update(req, res, next));
+router.post('/:id/start-inspection', (req, res, next) => moveOut_controller_1.moveOutController.startInspection(req, res, next));
+router.post('/:id/review-damage', (req, res, next) => moveOut_controller_1.moveOutController.reviewDamage(req, res, next));
+router.post('/:id/deposit-summary', (req, res, next) => moveOut_controller_1.moveOutController.saveDepositSummary(req, res, next));
+router.post('/:id/complete', (req, res, next) => moveOut_controller_1.moveOutController.completeMoveOut(req, res, next));
+router.post('/:id/cancel', (req, res, next) => moveOut_controller_1.moveOutController.cancelMoveOut(req, res, next));
+exports.default = router;
