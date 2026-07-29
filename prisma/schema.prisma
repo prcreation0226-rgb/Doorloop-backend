@@ -385,6 +385,9 @@ model WorkOrder {
   description     String          @db.Text
   vendorId        String?
   vendor          Vendor?         @relation(fields: [vendorId], references: [id])
+  staffId         String?
+  staff           StaffProfile?   @relation(fields: [staffId], references: [id])
+  serviceRequestId String?
   priority        Priority        @default(Normal)
   status          WorkOrderStatus @default(Open)
   estimatedCost   Float?
@@ -864,6 +867,8 @@ model StaffProfile {
 
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id])
+
+  workOrders         WorkOrder[]
 
   @@map("staff_profiles")
 }
