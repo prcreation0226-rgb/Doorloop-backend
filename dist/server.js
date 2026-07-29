@@ -7,10 +7,47 @@ const app_1 = __importDefault(require("./app"));
 const env_1 = require("./config/env");
 const logger_1 = require("./config/logger");
 const database_1 = __importDefault(require("./config/database"));
+async function bootstrapDb() {
+    try {
+        logger_1.logger.info('⚙️ Bootstrapping database schema with new columns...');
+        const ownerCols = [
+            'ALTER TABLE owner_documents ADD COLUMN ownerId VARCHAR(191) NULL;',
+            'ALTER TABLE owner_documents ADD COLUMN propertyId VARCHAR(191) NULL;',
+            'ALTER TABLE owner_documents ADD COLUMN companyId VARCHAR(191) NULL;'
+        ];
+        for (const sql of ownerCols) {
+            await database_1.default.$executeRawUnsafe(sql).catch((e) => {
+                // Ignore duplicate column error (1060) or already existing column warnings
+                if (!e.message.includes('1060') && !e.message.includes('Duplicate column')) {
+                    logger_1.logger.warn(`DDL execution warning: ${e.message}`);
+                }
+            });
+        }
+        const tenantCols = [
+            'ALTER TABLE tenant_documents ADD COLUMN tenantId VARCHAR(191) NULL;',
+            'ALTER TABLE tenant_documents ADD COLUMN propertyId VARCHAR(191) NULL;',
+            'ALTER TABLE tenant_documents ADD COLUMN buildingId VARCHAR(191) NULL;',
+            'ALTER TABLE tenant_documents ADD COLUMN unitId VARCHAR(191) NULL;',
+            'ALTER TABLE tenant_documents ADD COLUMN companyId VARCHAR(191) NULL;'
+        ];
+        for (const sql of tenantCols) {
+            await database_1.default.$executeRawUnsafe(sql).catch((e) => {
+                if (!e.message.includes('1060') && !e.message.includes('Duplicate column')) {
+                    logger_1.logger.warn(`DDL execution warning: ${e.message}`);
+                }
+            });
+        }
+        logger_1.logger.info('✅ Database schema bootstrap completed.');
+    }
+    catch (error) {
+        logger_1.logger.error(error, '❌ Failed to bootstrap database schema:');
+    }
+}
 // Connect and verify database connection
 database_1.default.$connect()
-    .then(() => {
+    .then(async () => {
     logger_1.logger.info('🔌 MySQL Database connected successfully via Prisma Client!');
+    await bootstrapDb();
 })
     .catch((error) => {
     logger_1.logger.error(error, '❌ Failed to connect to the MySQL database:');

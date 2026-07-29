@@ -3,10 +3,52 @@ import { env } from './config/env';
 import { logger } from './config/logger';
 import prisma from './config/database';
 
+async function bootstrapDb() {
+  try {
+    logger.info('⚙️ Bootstrapping database schema with new columns...');
+    
+    const ownerCols = [
+      'ALTER TABLE owner_documents ADD COLUMN ownerId VARCHAR(191) NULL;',
+      'ALTER TABLE owner_documents ADD COLUMN propertyId VARCHAR(191) NULL;',
+      'ALTER TABLE owner_documents ADD COLUMN companyId VARCHAR(191) NULL;'
+    ];
+
+    for (const sql of ownerCols) {
+      await prisma.$executeRawUnsafe(sql).catch((e: any) => {
+        // Ignore duplicate column error (1060) or already existing column warnings
+        if (!e.message.includes('1060') && !e.message.includes('Duplicate column')) {
+          logger.warn(`DDL execution warning: ${e.message}`);
+        }
+      });
+    }
+
+    const tenantCols = [
+      'ALTER TABLE tenant_documents ADD COLUMN tenantId VARCHAR(191) NULL;',
+      'ALTER TABLE tenant_documents ADD COLUMN propertyId VARCHAR(191) NULL;',
+      'ALTER TABLE tenant_documents ADD COLUMN buildingId VARCHAR(191) NULL;',
+      'ALTER TABLE tenant_documents ADD COLUMN unitId VARCHAR(191) NULL;',
+      'ALTER TABLE tenant_documents ADD COLUMN companyId VARCHAR(191) NULL;'
+    ];
+
+    for (const sql of tenantCols) {
+      await prisma.$executeRawUnsafe(sql).catch((e: any) => {
+        if (!e.message.includes('1060') && !e.message.includes('Duplicate column')) {
+          logger.warn(`DDL execution warning: ${e.message}`);
+        }
+      });
+    }
+
+    logger.info('✅ Database schema bootstrap completed.');
+  } catch (error) {
+    logger.error(error, '❌ Failed to bootstrap database schema:');
+  }
+}
+
 // Connect and verify database connection
 prisma.$connect()
-  .then(() => {
+  .then(async () => {
     logger.info('🔌 MySQL Database connected successfully via Prisma Client!');
+    await bootstrapDb();
   })
   .catch((error: Error) => {
     logger.error(error, '❌ Failed to connect to the MySQL database:');
