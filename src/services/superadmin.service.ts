@@ -77,11 +77,23 @@ export class SuperAdminService {
     });
   }
 
-  // Company Users
   async getCompanyUsers() {
-    return prisma.companyUser.findMany({
+    const companyUsers = await prisma.companyUser.findMany({
       include: { company: true },
       orderBy: { createdAt: 'desc' },
+    });
+
+    const emails = companyUsers.map((u) => u.email).filter(Boolean);
+    const vendors = await prisma.vendor.findMany({
+      where: { email: { in: emails } },
+    });
+
+    return companyUsers.map((u) => {
+      const matched = vendors.find((v) => v.email === u.email);
+      return {
+        ...u,
+        serviceType: matched ? matched.serviceType : undefined,
+      };
     });
   }
 
