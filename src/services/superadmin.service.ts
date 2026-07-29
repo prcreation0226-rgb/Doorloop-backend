@@ -85,8 +85,9 @@ export class SuperAdminService {
     });
   }
 
-  async createCompanyUser(data: { companyId: string; name: string; email: string; role?: string }) {
-    return prisma.companyUser.create({
+  async createCompanyUser(data: { companyId: string; name: string; email: string; role?: string; phone?: string; password?: string }) {
+    // 1. Create companyUser record
+    const companyUser = await prisma.companyUser.create({
       data: {
         companyId: data.companyId,
         name: data.name,
@@ -95,6 +96,35 @@ export class SuperAdminService {
         status: 'Active',
       },
     });
+
+    // 2. Fetch the corresponding Role record from DB
+    const roleName = data.role || 'Maintenance Staff';
+    const roleObj = await prisma.role.findFirst({
+      where: { name: roleName },
+    });
+
+    if (roleObj) {
+      const passwordHash = await bcrypt.hash(data.password || 'staff123', 12);
+      const nameParts = data.name.trim().split(/\s+/);
+      const firstName = nameParts[0] || 'Staff';
+      const lastName = nameParts.slice(1).join(' ') || 'User';
+
+      // 3. Create the corresponding login user in users table
+      await prisma.user.create({
+        data: {
+          email: data.email,
+          passwordHash,
+          firstName,
+          lastName,
+          phone: data.phone || '',
+          roleId: roleObj.id,
+          companyId: data.companyId,
+          status: 'Active',
+        },
+      });
+    }
+
+    return companyUser;
   }
 
   async updateCompanyUserStatus(id: string, status: string) {
