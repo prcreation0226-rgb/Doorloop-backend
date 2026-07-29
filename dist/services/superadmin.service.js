@@ -81,10 +81,20 @@ class SuperAdminService {
         });
     }
     async createCompanyUser(data) {
+        let finalCompanyId = data.companyId;
+        if (!finalCompanyId) {
+            const firstCompany = await database_1.default.company.findFirst();
+            if (firstCompany) {
+                finalCompanyId = firstCompany.id;
+            }
+        }
+        if (!finalCompanyId) {
+            throw new Error("No company exists in the database. Please create a company first.");
+        }
         // 1. Create companyUser record
         const companyUser = await database_1.default.companyUser.create({
             data: {
-                companyId: data.companyId,
+                companyId: finalCompanyId,
                 name: data.name,
                 email: data.email,
                 role: data.role || 'Admin',
@@ -110,7 +120,7 @@ class SuperAdminService {
                     lastName,
                     phone: data.phone || '',
                     roleId: roleObj.id,
-                    companyId: data.companyId,
+                    companyId: finalCompanyId,
                     status: 'Active',
                 },
             });

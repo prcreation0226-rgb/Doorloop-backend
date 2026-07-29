@@ -53,17 +53,46 @@ class UnitController {
         try {
             const { propertyId, buildingId, unitNumber, floor, bedrooms, bathrooms, squareFootage, rentAmount, securityDeposit, availabilityDate, status, } = req.body;
             const companyId = req.user?.companyId;
-            if (companyId) {
-                const check = await database_1.default.property.findFirst({
-                    where: { id: propertyId, companyId },
+            let targetPropertyId = propertyId;
+            let property = targetPropertyId ? await database_1.default.property.findUnique({ where: { id: targetPropertyId } }) : null;
+            if (!property) {
+                property = await database_1.default.property.findFirst({
+                    where: companyId ? { companyId } : {},
                 });
-                if (!check)
-                    throw new Error('Unauthorized property reference.');
+            }
+            if (!property) {
+                throw new Error('Please create a property before adding units.');
+            }
+            targetPropertyId = property.id;
+            let finalBuildingId = buildingId;
+            if (finalBuildingId) {
+                const existingBuilding = await database_1.default.building.findUnique({
+                    where: { id: finalBuildingId },
+                });
+                if (!existingBuilding) {
+                    finalBuildingId = undefined;
+                }
+            }
+            if (!finalBuildingId) {
+                let building = await database_1.default.building.findFirst({
+                    where: { propertyId: targetPropertyId },
+                });
+                if (!building) {
+                    building = await database_1.default.building.create({
+                        data: {
+                            propertyId: targetPropertyId,
+                            name: 'Main Building',
+                            floors: 1,
+                            unitsCount: 1,
+                        },
+                    });
+                }
+                finalBuildingId = building.id;
             }
             const unit = await database_1.default.unit.create({
                 data: {
-                    propertyId,
-                    buildingId,
+                    propertyId: targetPropertyId,
+                    buildingId: finalBuildingId,
                     unitNumber,
                     floor: parseInt(floor || '1'),
                     bedrooms: parseInt(bedrooms || '1'),

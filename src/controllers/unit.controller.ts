@@ -63,17 +63,49 @@ export class UnitController {
       } = req.body;
       const companyId = req.user?.companyId;
 
-      if (companyId) {
-        const check = await prisma.property.findFirst({
-          where: { id: propertyId, companyId },
+      let targetPropertyId = propertyId;
+      let property = targetPropertyId ? await prisma.property.findUnique({ where: { id: targetPropertyId } }) : null;
+      if (!property) {
+        property = await prisma.property.findFirst({
+          where: companyId ? { companyId } : {},
         });
-        if (!check) throw new Error('Unauthorized property reference.');
+      }
+      if (!property) {
+        throw new Error('Please create a property before adding units.');
+      }
+      targetPropertyId = property.id;
+
+      let finalBuildingId = buildingId;
+      if (finalBuildingId) {
+        const existingBuilding = await prisma.building.findUnique({
+          where: { id: finalBuildingId },
+        });
+        if (!existingBuilding) {
+          finalBuildingId = undefined;
+        }
+      }
+
+      if (!finalBuildingId) {
+        let building = await prisma.building.findFirst({
+          where: { propertyId: targetPropertyId },
+        });
+        if (!building) {
+          building = await prisma.building.create({
+            data: {
+              propertyId: targetPropertyId,
+              name: 'Main Building',
+              floors: 1,
+              unitsCount: 1,
+            },
+          });
+        }
+        finalBuildingId = building.id;
       }
 
       const unit = await prisma.unit.create({
         data: {
-          propertyId,
-          buildingId,
+          propertyId: targetPropertyId,
+          buildingId: finalBuildingId,
           unitNumber,
           floor: parseInt(floor || '1'),
           bedrooms: parseInt(bedrooms || '1'),
