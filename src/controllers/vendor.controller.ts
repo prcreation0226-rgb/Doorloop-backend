@@ -14,7 +14,25 @@ export class VendorController {
           workOrders: true,
         },
       });
-      return sendSuccess({ res, data: vendors });
+
+      // Fetch matching login users to attach their status
+      const emails = vendors.map((v) => v.email).filter(Boolean);
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          email: { in: emails },
+          companyId: companyId || undefined,
+        },
+      });
+
+      const vendorsWithStatus = vendors.map((v) => {
+        const userRec = matchedUsers.find((u) => u.email === v.email);
+        return {
+          ...v,
+          status: userRec ? userRec.status : 'Active',
+        };
+      });
+
+      return sendSuccess({ res, data: vendorsWithStatus });
     } catch (error) {
       next(error);
     }
