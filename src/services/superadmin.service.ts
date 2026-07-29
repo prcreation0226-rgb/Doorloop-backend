@@ -85,7 +85,7 @@ export class SuperAdminService {
     });
   }
 
-  async createCompanyUser(data: { companyId?: string; name: string; email: string; role?: string; phone?: string; password?: string }) {
+  async createCompanyUser(data: { companyId?: string; name: string; email: string; role?: string; phone?: string; password?: string; serviceType?: string }) {
     let finalCompanyId = data.companyId;
     if (!finalCompanyId) {
       const firstCompany = await prisma.company.findFirst();
@@ -148,7 +148,7 @@ export class SuperAdminService {
               contactName: data.name,
               email: data.email,
               phone: data.phone || '',
-              serviceType: 'General Maintenance',
+              serviceType: data.serviceType || 'General Maintenance',
               rating: 5.0,
               companyId: finalCompanyId,
             },

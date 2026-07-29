@@ -62,12 +62,11 @@ export class VendorController {
                 lastName,
                 phone: phone || '',
                 roleId: roleObj.id,
-                companyId,
-                status: 'Active',
               },
             });
           }
         }
+      }
       return sendSuccess({ res, statusCode: 201, data: vendor });
     } catch (error) {
       next(error);
