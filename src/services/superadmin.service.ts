@@ -85,11 +85,23 @@ export class SuperAdminService {
     });
   }
 
-  async createCompanyUser(data: { companyId: string; name: string; email: string; role?: string; phone?: string; password?: string }) {
+  async createCompanyUser(data: { companyId?: string; name: string; email: string; role?: string; phone?: string; password?: string }) {
+    let finalCompanyId = data.companyId;
+    if (!finalCompanyId) {
+      const firstCompany = await prisma.company.findFirst();
+      if (firstCompany) {
+        finalCompanyId = firstCompany.id;
+      }
+    }
+
+    if (!finalCompanyId) {
+      throw new Error("No company exists in the database. Please create a company first.");
+    }
+
     // 1. Create companyUser record
     const companyUser = await prisma.companyUser.create({
       data: {
-        companyId: data.companyId,
+        companyId: finalCompanyId,
         name: data.name,
         email: data.email,
         role: data.role || 'Admin',
@@ -118,7 +130,7 @@ export class SuperAdminService {
           lastName,
           phone: data.phone || '',
           roleId: roleObj.id,
-          companyId: data.companyId,
+          companyId: finalCompanyId,
           status: 'Active',
         },
       });
