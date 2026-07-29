@@ -21,6 +21,7 @@ enum UnitStatus {
   Vacant
   Reserved
   UnderMaintenance
+  Vacant_Needs_Preparation
 }
 
 enum TenantStatus {
@@ -30,10 +31,14 @@ enum TenantStatus {
 }
 
 enum LeaseStatus {
+  Draft
+  Pending_Move_In @map("Pending Move In")
   Active
   Pending
   Expired
   Terminated
+  Ended
+  Cancelled
 }
 
 enum PaymentStatus {
@@ -72,24 +77,25 @@ enum Priority {
 
 // --- User & RBAC Models ---
 model User {
-  id           String           @id @default(uuid())
-  email        String           @unique
+  id           String    @id @default(uuid())
+  email        String    @unique
   passwordHash String
   firstName    String
   lastName     String
   phone        String?
   roleId       String
-  role         Role             @relation(fields: [roleId], references: [id])
-  status       String           @default("Active")
+  role         Role      @relation(fields: [roleId], references: [id])
+  status       String    @default("Active")
   lastLogin    DateTime?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  companyId    String?
-  company      Company?         @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
-  assignments  UserAssignment[]
-  auditLogs    AuditLog[]
+  assignments         UserAssignment[]
+  auditLogs           AuditLog[]
+  assignedInspections Inspection[]     @relation("InspectorRelation")
 
   @@map("users")
 }
@@ -106,25 +112,25 @@ model Role {
 }
 
 model Permission {
-  id         String   @id @default(uuid())
+  id         String  @id @default(uuid())
   roleId     String
-  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  module     String   // e.g. "Properties", "Leasing", "Accounting"
-  canView    Boolean  @default(false)
-  canCreate  Boolean  @default(false)
-  canEdit    Boolean  @default(false)
-  canDelete  Boolean  @default(false)
-  canApprove Boolean  @default(false)
-  canExport  Boolean  @default(false)
+  role       Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module     String // e.g. "Properties", "Leasing", "Accounting"
+  canView    Boolean @default(false)
+  canCreate  Boolean @default(false)
+  canEdit    Boolean @default(false)
+  canDelete  Boolean @default(false)
+  canApprove Boolean @default(false)
+  canExport  Boolean @default(false)
 
   @@unique([roleId, module])
   @@map("permissions")
 }
 
 model UserAssignment {
-  id         String   @id @default(uuid())
+  id         String  @id @default(uuid())
   userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   propertyId String?
   buildingId String?
   unitId     String?
@@ -134,21 +140,21 @@ model UserAssignment {
 
 // --- Real Estate Core Models ---
 model Owner {
-  id                   String              @id @default(uuid())
-  name                 String              @default("")
+  id                   String   @id @default(uuid())
+  name                 String   @default("")
   companyName          String?
-  email                String              @unique
+  email                String   @unique
   phone                String
   streetAddress        String?
-  payoutMethod         String              @default("ACH/Direct Deposit")
-  propertiesOwnedCount Int                 @default(0)
-  createdAt            DateTime            @default(now())
+  payoutMethod         String   @default("ACH/Direct Deposit")
+  propertiesOwnedCount Int      @default(0)
+  createdAt            DateTime @default(now())
 
-  companyId            String?
-  company              Company?            @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
-  properties           Property[]
-  distributions        OwnerDistribution[]
+  properties    Property[]
+  distributions OwnerDistribution[]
 
   @@map("owners")
 }
@@ -182,14 +188,14 @@ model Property {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
-  companyId           String?
-  company             Company?     @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
-  buildings           Building[]
-  units               Unit[]
-  leases              Lease[]
-  rentPayments        RentPayment[]
-  workOrders          WorkOrder[]
+  buildings    Building[]
+  units        Unit[]
+  leases       Lease[]
+  rentPayments RentPayment[]
+  workOrders   WorkOrder[]
 
   @@map("properties")
 }
@@ -203,7 +209,7 @@ model Building {
   unitsCount    Int      @default(0)
   occupancyRate Float    @default(0)
 
-  units         Unit[]
+  units Unit[]
 
   @@map("buildings")
 }
@@ -224,10 +230,12 @@ model Unit {
   availabilityDate DateTime
   status           UnitStatus @default(Vacant)
 
-  tenants          Tenant[]
-  leases           Lease[]
-  rentPayments     RentPayment[]
-  violations       Violation[]
+  tenants      Tenant[]
+  leases       Lease[]
+  rentPayments RentPayment[]
+  violations   Violation[]
+  moveIns      MoveIn[]
+  moveOuts     MoveOut[]
 
   @@map("units")
 }
@@ -244,7 +252,7 @@ model Tenant {
   createdAt DateTime     @default(now())
 
   companyId String?
-  company   Company?     @relation(fields: [companyId], references: [id])
+  company   Company? @relation(fields: [companyId], references: [id])
 
   leases            Lease[]
   payments          RentPayment[]
@@ -270,12 +278,14 @@ model Lease {
   endDate       DateTime
   rentAmount    Float
   depositAmount Float
-  status        LeaseStatus @default(Pending)
+  status        LeaseStatus @default(Pending_Move_In)
 
-  companyId     String?
-  company       Company?    @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   payments RentPayment[]
+  moveIn   MoveIn?
+  moveOut  MoveOut?
 
   @@map("leases")
 }
@@ -299,23 +309,23 @@ model RentPayment {
   referenceNumber String?
   createdBy       String        @default("System")
 
-  companyId       String?
-  company         Company?      @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("rent_payments")
 }
 
 model CoAAccount {
-  id          String   @id @default(uuid())
-  accountCode String   @unique
+  id          String  @id @default(uuid())
+  accountCode String  @unique
   accountName String
-  type        String   // Asset, Liability, Equity, Revenue, Expense
+  type        String // Asset, Liability, Equity, Revenue, Expense
   subType     String?
-  balance     Float    @default(0)
-  isActive    Boolean  @default(true)
+  balance     Float   @default(0)
+  isActive    Boolean @default(true)
 
-  companyId   String?
-  company     Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   journalLines JournalEntryLine[]
 
@@ -330,8 +340,8 @@ model JournalEntry {
   reference   String?
   lines       JournalEntryLine[]
 
-  companyId   String?
-  company     Company?           @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("journal_entries")
 }
@@ -350,18 +360,18 @@ model JournalEntryLine {
 
 // --- Maintenance & Operations Models ---
 model Vendor {
-  id          String      @id @default(uuid())
+  id          String @id @default(uuid())
   companyName String
   contactName String
   email       String
   phone       String
   serviceType String
-  rating      Float       @default(5.0)
+  rating      Float  @default(5.0)
 
-  companyId   String?
-  company     Company?    @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
-  workOrders  WorkOrder[]
+  workOrders WorkOrder[]
 
   @@map("vendors")
 }
@@ -382,8 +392,8 @@ model WorkOrder {
   resolutionNotes String?         @db.Text
   createdAt       DateTime        @default(now())
 
-  companyId       String?
-  company         Company?        @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("work_orders")
 }
@@ -442,8 +452,8 @@ model InsurancePolicy {
   status         String   @default("Active")
   createdAt      DateTime @default(now())
 
-  companyId      String?
-  company        Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("insurance_policies")
 }
@@ -488,8 +498,8 @@ model Document {
   uploadedBy String   @default("Property Manager")
   createdAt  DateTime @default(now())
 
-  companyId  String?
-  company    Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("documents")
 }
@@ -517,8 +527,8 @@ model BankAccount {
   status        String   @default("Active")
   createdAt     DateTime @default(now())
 
-  companyId     String?
-  company       Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("bank_accounts")
 }
@@ -536,11 +546,11 @@ model SubscriptionPlan {
 }
 
 model SecurityPolicy {
-  id             String   @id @default(uuid())
-  mfaRequired    Boolean  @default(true)
-  sessionTimeout Int      @default(30)
-  passwordPolicy String   @default("Strong")
-  ipWhitelist    String   @default("192.168.1.0/24")
+  id             String  @id @default(uuid())
+  mfaRequired    Boolean @default(true)
+  sessionTimeout Int     @default(30)
+  passwordPolicy String  @default("Strong")
+  ipWhitelist    String  @default("192.168.1.0/24")
 
   @@map("security_policies")
 }
@@ -579,8 +589,8 @@ model ScreeningReport {
   status       String   @default("Approved")
   createdAt    DateTime @default(now())
 
-  companyId    String?
-  company      Company?         @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("screening_reports")
 }
@@ -595,8 +605,8 @@ model Violation {
   status      String   @default("Open")
   createdAt   DateTime @default(now())
 
-  companyId  String?
-  company    Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("violations")
 }
@@ -612,8 +622,8 @@ model Application {
   rentProposed  Float
   createdAt     DateTime @default(now())
 
-  companyId     String?
-  company       Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("applications")
 }
@@ -636,8 +646,8 @@ model Invoice {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  companyId    String?
-  company      Company?  @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("invoices")
 }
@@ -665,50 +675,54 @@ model ServiceRequest {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  companyId          String?
-  company            Company?  @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("service_requests")
 }
 
 model Company {
-  id          String        @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
-  code        String        @unique
+  code        String   @unique
   contactName String
-  email       String        @unique
+  email       String   @unique
   phone       String
-  planName    String        @default("Pro Plan")
-  storageUsed String        @default("1.2 GB")
-  status      String        @default("Active")
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  planName    String   @default("Pro Plan")
+  storageUsed String   @default("1.2 GB")
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  users             CompanyUser[]
-  invoices          SaaSInvoice[]
-  portalUsers       User[]
-  properties        Property[]
-  owners            Owner[]
-  tenants           Tenant[]
-  leases            Lease[]
-  workOrders        WorkOrder[]
-  payments          RentPayment[]
-  reports           ScreeningReport[]
-  invoicesPm        Invoice[]
-  serviceReqs       ServiceRequest[]
-  violations        Violation[]
-  staff             StaffProfile[]
-  applications      Application[]
-  coaAccounts       CoAAccount[]
-  journalEntries    JournalEntry[]
-  vendors           Vendor[]
-  bankAccounts      BankAccount[]
-  announcements     Announcement[]
-  insurancePolicies InsurancePolicy[]
-  promotions        Promotion[]
-  notifications     Notification[]
-  documents         Document[]
-  aiChatLogs        AiChatLog[]
+  users               CompanyUser[]
+  invoices            SaaSInvoice[]
+  portalUsers         User[]
+  properties          Property[]
+  owners              Owner[]
+  tenants             Tenant[]
+  leases              Lease[]
+  workOrders          WorkOrder[]
+  payments            RentPayment[]
+  reports             ScreeningReport[]
+  invoicesPm          Invoice[]
+  serviceReqs         ServiceRequest[]
+  violations          Violation[]
+  staff               StaffProfile[]
+  applications        Application[]
+  coaAccounts         CoAAccount[]
+  journalEntries      JournalEntry[]
+  vendors             Vendor[]
+  bankAccounts        BankAccount[]
+  announcements       Announcement[]
+  insurancePolicies   InsurancePolicy[]
+  promotions          Promotion[]
+  notifications       Notification[]
+  documents           Document[]
+  aiChatLogs          AiChatLog[]
+  moveIns             MoveIn[]
+  moveOuts            MoveOut[]
+  inspectionTemplates InspectionTemplate[]
+  inspections         Inspection[]
 
   @@map("companies")
 }
@@ -832,8 +846,8 @@ model StaffProfile {
   customerRating     String   @default("4.92 / 5.0")
   createdAt          DateTime @default(now())
 
-  companyId          String?
-  company            Company?     @relation(fields: [companyId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("staff_profiles")
 }
@@ -873,28 +887,270 @@ model Expense {
 }
 
 model MaintenanceRequest {
-  id          String   @id @default(uuid())
-  title       String
-  description String   @db.Text
+  id           String   @id @default(uuid())
+  title        String
+  description  String   @db.Text
   propertyName String
-  unitNumber  String
-  priority    String   @default("Normal")
-  status      String   @default("New")
-  createdAt   DateTime @default(now())
+  unitNumber   String
+  priority     String   @default("Normal")
+  status       String   @default("New")
+  createdAt    DateTime @default(now())
 
   @@map("maintenance_requests")
 }
 
+enum MoveInStatus {
+  SCHEDULED
+  INSPECTION_PENDING
+  INSPECTION_IN_PROGRESS
+  INSPECTION_COMPLETED
+  COMPLETED
+  CANCELLED
+}
+
+enum InspectionStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum InspectionCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+}
+
+enum InspectionTemplateType {
+  MOVE_IN
+  MOVE_OUT
+  ROUTINE
+}
+
+enum InspectionType {
+  MOVE_IN
+  MOVE_OUT
+  ROUTINE
+}
+
+model MoveIn {
+  id            String       @id @default(uuid())
+  leaseId       String       @unique
+  lease         Lease        @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  unitId        String
+  unit          Unit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  scheduledDate DateTime
+  completedDate DateTime?
+  status        MoveInStatus @default(SCHEDULED)
+  notes         String?      @db.Text
+  createdBy     String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  inspections Inspection[]
+  companyId   String?
+  company     Company?     @relation(fields: [companyId], references: [id])
+
+  @@map("move_ins")
+}
+
+enum MoveOutStatus {
+  SCHEDULED
+  INSPECTION_PENDING
+  INSPECTION_IN_PROGRESS
+  INSPECTION_COMPLETED
+  DAMAGE_REVIEW
+  READY_FOR_COMPLETION
+  COMPLETED
+  CANCELLED
+}
+
+enum DamageDecision {
+  CHARGE_TENANT
+  NO_CHARGE
+  MAINTENANCE_REPAIR
+}
+
+model MoveOut {
+  id            String             @id @default(uuid())
+  leaseId       String             @unique
+  lease         Lease              @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  unitId        String
+  unit          Unit               @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  scheduledDate DateTime
+  completedDate DateTime?
+  status        MoveOutStatus      @default(SCHEDULED)
+  notes         String?            @db.Text
+  cancelReason  String?            @db.Text
+  cancelledBy   String?
+  cancelledAt   DateTime?
+  createdBy     String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  companyId     String?
+  company       Company?           @relation(fields: [companyId], references: [id])
+  inspections   Inspection[]
+  damageItems   DamageReviewItem[]
+  depositSummary MoveOutDepositSummary?
+
+  @@map("move_outs")
+}
+
+model DamageReviewItem {
+  id               String              @id @default(uuid())
+  moveOutId        String
+  moveOut          MoveOut             @relation(fields: [moveOutId], references: [id], onDelete: Cascade)
+  inspectionItemId String
+  roomName         String
+  itemLabel        String
+  condition        InspectionCondition
+  notes            String?             @db.Text
+  decision         DamageDecision?
+  chargeAmount     Float?
+  reviewedBy       String?
+  reviewedAt       DateTime?
+  createdAt        DateTime            @default(now())
+
+  @@map("damage_review_items")
+}
+
+model MoveOutDepositSummary {
+  id              String    @id @default(uuid())
+  moveOutId       String    @unique
+  moveOut         MoveOut   @relation(fields: [moveOutId], references: [id], onDelete: Cascade)
+  originalDeposit Float
+  totalCharges    Float     @default(0)
+  refundAmount    Float     @default(0)
+  notes           String?   @db.Text
+  approvedBy      String?
+  approvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("move_out_deposit_summaries")
+}
+
+model InspectionTemplate {
+  id          String                   @id @default(uuid())
+  name        String
+  type        InspectionTemplateType   @default(MOVE_IN)
+  description String?                  @db.Text
+  active      Boolean                  @default(true)
+  createdBy   String?
+  createdAt   DateTime                 @default(now())
+  companyId   String?
+  company     Company?                 @relation(fields: [companyId], references: [id])
+  rooms       InspectionTemplateRoom[]
+
+  @@map("inspection_templates")
+}
+
+model InspectionTemplateRoom {
+  id         String                   @id @default(uuid())
+  templateId String
+  template   InspectionTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name       String
+  sortOrder  Int                      @default(0)
+  items      InspectionTemplateItem[]
+
+  @@map("inspection_template_rooms")
+}
+
+model InspectionTemplateItem {
+  id        String                 @id @default(uuid())
+  roomId    String
+  room      InspectionTemplateRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  label     String
+  required  Boolean                @default(false)
+  sortOrder Int                    @default(0)
+
+  @@map("inspection_template_items")
+}
+
 model Inspection {
-  id           String   @id @default(uuid())
-  propertyName String
-  unitNumber   String
-  inspector    String
-  status       String   @default("Scheduled")
-  date         DateTime @default(now())
-  createdAt    DateTime @default(now())
+  id               String           @id @default(uuid())
+  inspectionNumber String           @unique // e.g. MI-000001
+  type             InspectionType   @default(MOVE_IN)
+  moveInId         String?
+  moveIn           MoveIn?          @relation(fields: [moveInId], references: [id], onDelete: Cascade)
+  moveOutId        String?
+  moveOut          MoveOut?         @relation(fields: [moveOutId], references: [id], onDelete: Cascade)
+  templateId       String? // Original template reference
+  templateName     String // Snapshot of template name
+  templateVersion  Int              @default(1)
+  status           InspectionStatus @default(DRAFT)
+
+  // Assignment details
+  assignedInspectorId String?
+  assignedInspector   User?     @relation("InspectorRelation", fields: [assignedInspectorId], references: [id], onDelete: SetNull)
+  assignedBy          String? // Manager User ID
+  assignedAt          DateTime?
+
+  startedAt          DateTime  @default(now())
+  completedAt        DateTime?
+  overallNotes       String?   @db.Text
+  managerNotes       String?   @db.Text
+  tenantSignature    String?   @db.Text
+  inspectorSignature String?   @db.Text
+  tenantSignedAt     DateTime?
+  inspectorSignedAt  DateTime?
+
+  // Cancellation details
+  cancelReason String?   @db.Text
+  cancelledBy  String?
+  cancelledAt  DateTime?
+
+  createdBy String? // Started by user
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  companyId String?
+  company   Company?         @relation(fields: [companyId], references: [id])
+  rooms     InspectionRoom[]
 
   @@map("inspections")
+}
+
+model InspectionRoom {
+  id           String           @id @default(uuid())
+  inspectionId String
+  inspection   Inspection       @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  name         String
+  sortOrder    Int              @default(0)
+  items        InspectionItem[]
+
+  @@map("inspection_rooms")
+}
+
+model InspectionItem {
+  id        String         @id @default(uuid())
+  roomId    String
+  room      InspectionRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  label     String
+  required  Boolean        @default(false)
+  sortOrder Int            @default(0)
+
+  // Responses
+  condition InspectionCondition?
+  notes     String?              @db.Text
+  completed Boolean              @default(false)
+
+  photos InspectionPhoto[]
+
+  @@map("inspection_items")
+}
+
+model InspectionPhoto {
+  id         String         @id @default(uuid())
+  itemId     String
+  item       InspectionItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  url        String         @db.Text
+  caption    String?
+  sortOrder  Int            @default(0)
+  uploadedBy String? // User ID
+  createdAt  DateTime       @default(now())
+
+  @@map("inspection_photos")
 }
 
 model Income {

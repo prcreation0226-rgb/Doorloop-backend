@@ -13,18 +13,44 @@ export class LeaseService {
   }
 
   async createLease(data: any) {
-    return prisma.lease.create({
-      data: {
-        tenantId: data.tenantId,
-        propertyId: data.propertyId,
-        unitId: data.unitId,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
-        rentAmount: data.rentAmount,
-        depositAmount: data.depositAmount,
-        status: data.status || 'Pending',
-        companyId: data.companyId,
-      },
+    return prisma.$transaction(async (tx) => {
+      const lease = await tx.lease.create({
+        data: {
+          tenantId: data.tenantId,
+          propertyId: data.propertyId,
+          unitId: data.unitId,
+          startDate: new Date(data.startDate),
+          endDate: new Date(data.endDate),
+          rentAmount: Number(data.rentAmount),
+          depositAmount: Number(data.depositAmount),
+          status: 'Pending_Move_In',
+          companyId: data.companyId,
+        },
+      });
+
+      await tx.moveIn.create({
+        data: {
+          leaseId: lease.id,
+          unitId: lease.unitId,
+          scheduledDate: lease.startDate,
+          status: 'SCHEDULED',
+          createdBy: data.createdBy || 'System',
+          companyId: data.companyId,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          action: 'Lease Created & Move In Scheduled',
+          userId: data.userId || null,
+          module: 'Leasing',
+          object: `Lease ${lease.id}`,
+          ip: '127.0.0.1',
+          status: 'Success',
+        },
+      });
+
+      return lease;
     });
   }
 

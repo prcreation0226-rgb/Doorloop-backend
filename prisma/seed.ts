@@ -7,6 +7,14 @@ async function main() {
 
   // Clean up existing data to ensure idempotent seed runs
   await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0;');
+  await prisma.inspectionPhoto.deleteMany({});
+  await prisma.inspectionItem.deleteMany({});
+  await prisma.inspectionRoom.deleteMany({});
+  await prisma.inspection.deleteMany({});
+  await prisma.moveIn.deleteMany({});
+  await prisma.inspectionTemplateItem.deleteMany({});
+  await prisma.inspectionTemplateRoom.deleteMany({});
+  await prisma.inspectionTemplate.deleteMany({});
   await prisma.rentPayment.deleteMany({});
   await prisma.lease.deleteMany({});
   await prisma.unit.deleteMany({});
@@ -467,6 +475,51 @@ async function main() {
     data: [
       { tenantName: 'Alice Cooper', email: 'alice@example.com', propertyName: 'Oakridge Heights', unitNumber: '101', rentProposed: 1500, status: 'Pending', companyId: apex.id },
       { tenantName: 'Bob Vance', email: 'bob@vance.com', propertyName: 'Skyline Heights', unitNumber: 'Suite 100', rentProposed: 5000, status: 'Approved', companyId: skyline.id },
+    ],
+  });
+
+  // 11. Seed Inspection Template
+  const standardTemplate = await prisma.inspectionTemplate.create({
+    data: {
+      name: 'Standard Apartment Move In Checklist',
+      type: 'MOVE_IN',
+      description: 'Comprehensive structural quality checklist for new resident move-ins.',
+      active: true,
+      createdBy: 'System',
+      companyId: apex.id,
+    },
+  });
+
+  const kitchenRoom = await prisma.inspectionTemplateRoom.create({
+    data: {
+      templateId: standardTemplate.id,
+      name: 'Kitchen',
+      sortOrder: 0,
+    },
+  });
+
+  await prisma.inspectionTemplateItem.createMany({
+    data: [
+      { roomId: kitchenRoom.id, label: 'Walls & Trim', required: true, sortOrder: 0 },
+      { roomId: kitchenRoom.id, label: 'Cabinets & Drawers', required: true, sortOrder: 1 },
+      { roomId: kitchenRoom.id, label: 'Sink & Faucet', required: true, sortOrder: 2 },
+      { roomId: kitchenRoom.id, label: 'Stove & Oven', required: true, sortOrder: 3 },
+    ],
+  });
+
+  const livingRoom = await prisma.inspectionTemplateRoom.create({
+    data: {
+      templateId: standardTemplate.id,
+      name: 'Living Room',
+      sortOrder: 1,
+    },
+  });
+
+  await prisma.inspectionTemplateItem.createMany({
+    data: [
+      { roomId: livingRoom.id, label: 'Flooring / Carpet', required: true, sortOrder: 0 },
+      { roomId: livingRoom.id, label: 'Outlets & Switches', required: true, sortOrder: 1 },
+      { roomId: livingRoom.id, label: 'Smoke Detector', required: true, sortOrder: 2 },
     ],
   });
 

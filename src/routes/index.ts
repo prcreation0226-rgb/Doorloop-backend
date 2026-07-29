@@ -17,6 +17,10 @@ import applicationRoutes from './application.routes';
 import superAdminRoutes from './superadmin.routes';
 import invoiceRoutes from './invoice.routes';
 import serviceRequestRoutes from './serviceRequest.routes';
+import moveInRoutes from './moveIn.routes';
+import moveOutRoutes from './moveOut.routes';
+import inspectionTemplateRoutes from './inspectionTemplate.routes';
+import inspectionRoutes from './inspection.routes';
 import { authMiddleware } from '../middlewares/auth.middleware';
 
 const router = Router();
@@ -46,6 +50,10 @@ router.use('/service-requests', authMiddleware, serviceRequestRoutes);
 router.use('/buildings', authMiddleware, buildingRoutes);
 router.use('/units', authMiddleware, unitRoutes);
 router.use('/applications', authMiddleware, applicationRoutes);
+router.use('/move-ins', authMiddleware, moveInRoutes);
+router.use('/move-outs', authMiddleware, moveOutRoutes);
+router.use('/inspection-templates', authMiddleware, inspectionTemplateRoutes);
+router.use('/inspections', authMiddleware, inspectionRoutes);
 router.use('/', authMiddleware, secondaryRoutes);
 
 export default router;

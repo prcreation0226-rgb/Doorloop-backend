@@ -1615,7 +1615,7 @@ export class PortalController {
   async getInspections(req: Request, res: Response, next: NextFunction) {
     try {
       const inspections = await prisma.inspection.findMany({
-        orderBy: { date: 'asc' },
+        orderBy: { startedAt: 'asc' },
       });
       return sendSuccess({ res, data: inspections });
     } catch (error) {
@@ -1625,14 +1625,16 @@ export class PortalController {
 
   async createInspection(req: Request, res: Response, next: NextFunction) {
     try {
-      const { propertyName, unitNumber, inspector, status, date } = req.body;
+      const { status, date } = req.body;
+      const count = await prisma.inspection.count();
+      const formattedCount = String(count + 1).padStart(6, '0');
       const inspection = await prisma.inspection.create({
         data: {
-          propertyName,
-          unitNumber,
-          inspector,
-          status: status || 'Scheduled',
-          date: date ? new Date(date) : new Date(),
+          inspectionNumber: `MI-${formattedCount}`,
+          status: (status as any) || 'DRAFT',
+          startedAt: date ? new Date(date) : new Date(),
+          templateName: 'Standard Template',
+          templateVersion: 1,
         },
       });
       return sendSuccess({ res, statusCode: 201, data: inspection });
@@ -1643,13 +1645,12 @@ export class PortalController {
 
   async updateInspection(req: Request, res: Response, next: NextFunction) {
     try {
-      const { status, date, inspector } = req.body;
+      const { status, date } = req.body;
       const inspection = await prisma.inspection.update({
         where: { id: req.params.id as string },
         data: {
-          status,
-          date: date ? new Date(date) : undefined,
-          inspector,
+          status: status as any,
+          startedAt: date ? new Date(date) : undefined,
         },
       });
       return sendSuccess({ res, data: inspection });
