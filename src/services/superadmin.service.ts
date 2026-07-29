@@ -101,21 +101,26 @@ export class SuperAdminService {
   async createCompanyUser(data: { companyId?: string; name: string; email: string; role?: string; phone?: string; password?: string; serviceType?: string }) {
     let finalCompanyId = await getManagerCompanyId(undefined, data.companyId);
 
+    // Map user-facing "Maintenance" role to "Maintenance Staff"
+    let mappedRole = data.role || 'Admin';
+    if (mappedRole === 'Maintenance') {
+      mappedRole = 'Maintenance Staff';
+    }
+
     // 1. Create companyUser record
     const companyUser = await prisma.companyUser.create({
       data: {
         companyId: finalCompanyId,
         name: data.name,
         email: data.email,
-        role: data.role || 'Admin',
+        role: mappedRole,
         status: 'Active',
       },
     });
 
     // 2. Fetch the corresponding Role record from DB
-    const roleName = data.role || 'Maintenance Staff';
     const roleObj = await prisma.role.findFirst({
-      where: { name: roleName },
+      where: { name: mappedRole },
     });
 
     if (roleObj) {
@@ -138,8 +143,8 @@ export class SuperAdminService {
         },
       });
 
-      // Automatically create matching Vendor record if the role is Maintenance Staff or Maintenance
-      if (roleName === 'Maintenance Staff' || roleName === 'Maintenance') {
+      // Automatically create matching Vendor record if the role is Maintenance Staff
+      if (mappedRole === 'Maintenance Staff') {
         const existingVendor = await prisma.vendor.findFirst({
           where: { email: data.email },
         });
