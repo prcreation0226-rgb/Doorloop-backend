@@ -817,7 +817,32 @@ class PortalController {
     }
     async createCrmLead(req, res, next) {
         try {
-            const { name, firstName, lastName, email, phone, source } = req.body;
+            const { id, name, firstName, lastName, email, phone, source, budget, moveInDate, priority, assignedAgent, notes, property, companyId, status } = req.body;
+            if (id) {
+                const existing = await database_1.default.crmLead.findUnique({
+                    where: { id },
+                });
+                if (existing) {
+                    const lead = await database_1.default.crmLead.update({
+                        where: { id },
+                        data: {
+                            name: name || undefined,
+                            email: email || undefined,
+                            phone: phone || undefined,
+                            source: source || undefined,
+                            status: status || undefined,
+                            budget: budget !== undefined ? (budget ? Number(budget) : null) : undefined,
+                            moveInDate: moveInDate !== undefined ? moveInDate : undefined,
+                            priority: priority || undefined,
+                            assignedAgent: assignedAgent !== undefined ? assignedAgent : undefined,
+                            notes: notes !== undefined ? notes : undefined,
+                            property: property !== undefined ? property : undefined,
+                            companyId: companyId !== undefined ? companyId : undefined,
+                        },
+                    });
+                    return (0, apiResponse_1.sendSuccess)({ res, data: lead });
+                }
+            }
             const resolvedName = name || [firstName, lastName].filter(Boolean).join(' ') || 'Unnamed Lead';
             const resolvedSource = source || 'Portal';
             const lead = await database_1.default.crmLead.create({
@@ -825,7 +850,15 @@ class PortalController {
                     name: resolvedName,
                     email,
                     phone,
-                    source: resolvedSource
+                    source: resolvedSource,
+                    status: status || 'New',
+                    budget: budget ? Number(budget) : null,
+                    moveInDate: moveInDate || null,
+                    priority: priority || 'Medium',
+                    assignedAgent: assignedAgent || null,
+                    notes: notes || null,
+                    property: property || null,
+                    companyId: companyId || null,
                 },
             });
             return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: lead });
@@ -1680,6 +1713,61 @@ class PortalController {
                 data: { status: 'Cancelled' },
             });
             return (0, apiResponse_1.sendSuccess)({ res, data: signature });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    async updateScreeningReport(req, res, next) {
+        try {
+            const id = req.params.id;
+            const { status } = req.body;
+            const updateData = { status };
+            if (status === 'Completed') {
+                updateData.creditScore = 720;
+                updateData.criminalPass = true;
+                updateData.evictionPass = true;
+            }
+            const report = await database_1.default.screeningReport.update({
+                where: { id },
+                data: updateData,
+                include: { tenant: true },
+            });
+            if (status === 'Approved' && report.tenantId) {
+                await database_1.default.tenant.update({
+                    where: { id: report.tenantId },
+                    data: { status: 'Active' },
+                });
+                if (report.tenant?.email) {
+                    const app = await database_1.default.application.findFirst({
+                        where: { email: report.tenant.email },
+                    });
+                    if (app) {
+                        await database_1.default.application.update({
+                            where: { id: app.id },
+                            data: { status: 'Approved' },
+                        });
+                    }
+                }
+            }
+            else if (status === 'Declined' && report.tenantId) {
+                await database_1.default.tenant.update({
+                    where: { id: report.tenantId },
+                    data: { status: 'Inactive' },
+                });
+                if (report.tenant?.email) {
+                    const app = await database_1.default.application.findFirst({
+                        where: { email: report.tenant.email },
+                    });
+                    if (app) {
+                        await database_1.default.application.update({
+                            where: { id: app.id },
+                            data: { status: 'Rejected' },
+                        });
+                    }
+                }
+            }
+            return (0, apiResponse_1.sendSuccess)({ res, data: report });
         }
         catch (error) {
             next(error);

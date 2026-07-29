@@ -262,6 +262,7 @@ model Tenant {
   invoices          Invoice[]
   charges           Charge[]
   deposits          Deposit[]
+  imageUrl          String?      @db.Text
 
   @@map("tenants")
 }
@@ -568,13 +569,20 @@ model PaymentPlan {
 }
 
 model CrmLead {
-  id        String   @id @default(uuid())
-  name      String
-  email     String
-  phone     String
-  source    String
-  status    String   @default("New")
-  createdAt DateTime @default(now())
+  id                 String   @id @default(uuid())
+  name               String
+  email              String
+  phone              String
+  source             String
+  status             String   @default("New")
+  budget             Float?
+  moveInDate         String?
+  priority           String?  @default("Medium")
+  assignedAgent      String?
+  notes              String?  @db.Text
+  property           String?
+  companyId          String?
+  createdAt          DateTime @default(now())
 
   @@map("crm_leads")
 }

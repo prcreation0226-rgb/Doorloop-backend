@@ -122,6 +122,74 @@ class PropertyService {
             where: { id },
         });
     }
+    async updateProperty(id, data, file) {
+        const prop = await database_1.default.property.findUnique({
+            where: { id },
+        });
+        if (!prop)
+            throw new appError_1.AppError('Property not found.', 404, 'NOT_FOUND');
+        let ownerId = data.ownerId;
+        if (ownerId) {
+            const owner = await database_1.default.owner.findUnique({
+                where: { id: ownerId },
+            });
+            if (!owner) {
+                ownerId = prop.ownerId;
+            }
+        }
+        else {
+            ownerId = prop.ownerId;
+        }
+        let typeVal = data.type;
+        if (typeVal) {
+            typeVal = typeVal.replace(/\s+/g, '');
+            const validTypes = ['Apartment', 'Commercial', 'SingleFamily', 'MultiFamily', 'HOA'];
+            if (!validTypes.includes(typeVal)) {
+                typeVal = prop.type;
+            }
+        }
+        else {
+            typeVal = prop.type;
+        }
+        // Cloudinary upload
+        let imageUrl = data.imageUrl !== undefined ? data.imageUrl : prop.imageUrl;
+        if (file) {
+            try {
+                imageUrl = await new Promise((resolve, reject) => {
+                    const uploadStream = cloudinary_1.default.uploader.upload_stream({ folder: 'properties' }, (error, result) => {
+                        if (error)
+                            return reject(error);
+                        resolve(result?.secure_url || '');
+                    });
+                    uploadStream.end(file.buffer);
+                });
+            }
+            catch (err) {
+                console.error('Cloudinary image upload failed:', err);
+            }
+        }
+        return database_1.default.property.update({
+            where: { id },
+            data: {
+                name: data.name !== undefined ? data.name : prop.name,
+                type: typeVal,
+                status: data.status !== undefined ? data.status : prop.status,
+                ownerId: ownerId,
+                ownershipPercentage: data.ownershipPercentage !== undefined ? Number(data.ownershipPercentage) : prop.ownershipPercentage,
+                managementCompany: data.managementCompany !== undefined ? data.managementCompany : prop.managementCompany,
+                address: data.address !== undefined ? data.address : prop.address,
+                streetAddress: data.streetAddress !== undefined ? data.streetAddress : prop.streetAddress,
+                city: data.city !== undefined ? data.city : prop.city,
+                state: data.state !== undefined ? data.state : prop.state,
+                zip: data.zip !== undefined ? data.zip : prop.zip,
+                yearBuilt: data.yearBuilt !== undefined ? Number(data.yearBuilt) : prop.yearBuilt,
+                squareFootage: data.squareFootage !== undefined ? Number(data.squareFootage) : prop.squareFootage,
+                purchasePrice: data.purchasePrice !== undefined ? Number(data.purchasePrice) : prop.purchasePrice,
+                currentValue: data.currentValue !== undefined ? Number(data.currentValue) : prop.currentValue,
+                imageUrl: imageUrl,
+            },
+        });
+    }
 }
 exports.PropertyService = PropertyService;
 exports.propertyService = new PropertyService();

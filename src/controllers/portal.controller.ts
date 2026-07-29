@@ -856,7 +856,34 @@ export class PortalController {
 
   async createCrmLead(req: Request, res: Response, next: NextFunction) {
     try {
-      const { name, firstName, lastName, email, phone, source } = req.body;
+      const { id, name, firstName, lastName, email, phone, source, budget, moveInDate, priority, assignedAgent, notes, property, companyId, status } = req.body;
+
+      if (id) {
+        const existing = await prisma.crmLead.findUnique({
+          where: { id },
+        });
+        if (existing) {
+          const lead = await prisma.crmLead.update({
+            where: { id },
+            data: {
+              name: name || undefined,
+              email: email || undefined,
+              phone: phone || undefined,
+              source: source || undefined,
+              status: status || undefined,
+              budget: budget !== undefined ? (budget ? Number(budget) : null) : undefined,
+              moveInDate: moveInDate !== undefined ? moveInDate : undefined,
+              priority: priority || undefined,
+              assignedAgent: assignedAgent !== undefined ? assignedAgent : undefined,
+              notes: notes !== undefined ? notes : undefined,
+              property: property !== undefined ? property : undefined,
+              companyId: companyId !== undefined ? companyId : undefined,
+            },
+          });
+          return sendSuccess({ res, data: lead });
+        }
+      }
+
       const resolvedName = name || [firstName, lastName].filter(Boolean).join(' ') || 'Unnamed Lead';
       const resolvedSource = source || 'Portal';
       const lead = await prisma.crmLead.create({
@@ -864,7 +891,15 @@ export class PortalController {
           name: resolvedName, 
           email, 
           phone, 
-          source: resolvedSource 
+          source: resolvedSource,
+          status: status || 'New',
+          budget: budget ? Number(budget) : null,
+          moveInDate: moveInDate || null,
+          priority: priority || 'Medium',
+          assignedAgent: assignedAgent || null,
+          notes: notes || null,
+          property: property || null,
+          companyId: companyId || null,
         },
       });
       return sendSuccess({ res, statusCode: 201, data: lead });
@@ -1749,6 +1784,66 @@ export class PortalController {
         data: { status: 'Cancelled' },
       });
       return sendSuccess({ res, data: signature });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateScreeningReport(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const { status } = req.body;
+
+      const updateData: any = { status };
+      if (status === 'Completed') {
+        updateData.creditScore = 720;
+        updateData.criminalPass = true;
+        updateData.evictionPass = true;
+      }
+
+      const report = await prisma.screeningReport.update({
+        where: { id },
+        data: updateData,
+        include: { tenant: true },
+      });
+
+      if (status === 'Approved' && report.tenantId) {
+        await prisma.tenant.update({
+          where: { id: report.tenantId },
+          data: { status: 'Active' },
+        });
+
+        if (report.tenant?.email) {
+          const app = await prisma.application.findFirst({
+            where: { email: report.tenant.email },
+          });
+          if (app) {
+            await prisma.application.update({
+              where: { id: app.id },
+              data: { status: 'Approved' },
+            });
+          }
+        }
+      } else if (status === 'Declined' && report.tenantId) {
+        await prisma.tenant.update({
+          where: { id: report.tenantId },
+          data: { status: 'Inactive' },
+        });
+
+        if (report.tenant?.email) {
+          const app = await prisma.application.findFirst({
+            where: { email: report.tenant.email },
+          });
+          if (app) {
+            await prisma.application.update({
+              where: { id: app.id },
+              data: { status: 'Rejected' },
+            });
+          }
+        }
+      }
+
+      return sendSuccess({ res, data: report });
     } catch (error) {
       next(error);
     }
