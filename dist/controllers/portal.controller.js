@@ -1719,27 +1719,11 @@ class PortalController {
     }
     async createSignature(req, res, next) {
         try {
-            const { documentName, documentId, expiresAt, signers } = req.body;
-            let recipientName = req.body.recipientName;
-            let recipientEmail = req.body.recipientEmail;
-            if (!recipientName) {
-                if (Array.isArray(signers) && signers.length > 0) {
-                    recipientName = signers[0];
-                }
-                else if (typeof signers === 'string' && signers.trim()) {
-                    recipientName = signers.trim();
-                }
-                else {
-                    recipientName = 'Tenant / Signer';
-                }
-            }
-            if (!recipientEmail) {
-                recipientEmail = req.body.signerEmail || req.body.email || 'signer@example.com';
-            }
+            const { documentName, documentId, recipientName, recipientEmail, expiresAt } = req.body;
             const signature = await database_1.default.signature.create({
                 data: {
-                    documentName: documentName || 'Document.pdf',
-                    documentId: documentId || `doc-${Date.now()}`,
+                    documentName,
+                    documentId,
                     recipientName,
                     recipientEmail,
                     status: 'Sent',

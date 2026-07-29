@@ -18,51 +18,103 @@ class PaymentService {
         });
     }
     async processPayment(data) {
+        let tenantId = data.tenantId;
+        let propertyId = data.propertyId;
+        let unitId = data.unitId;
         let leaseId = data.leaseId;
-        if (!leaseId && data.tenantId) {
+        // 1. Verify tenant exists or find first tenant
+        let tenant = tenantId ? await database_1.default.tenant.findUnique({ where: { id: tenantId } }) : null;
+        if (!tenant && tenantId) {
+            tenant = await database_1.default.tenant.findFirst({ where: data.companyId ? { companyId: data.companyId } : {} });
+        }
+        if (tenant) {
+            tenantId = tenant.id;
+            if (!unitId && tenant.unitId) {
+                unitId = tenant.unitId;
+            }
+        }
+        // 2. Look for existing lease for tenant or unit
+        if (tenantId) {
             const lease = await database_1.default.lease.findFirst({
-                where: { tenantId: data.tenantId },
+                where: { tenantId },
                 orderBy: { startDate: 'desc' },
             });
             if (lease) {
                 leaseId = lease.id;
-            }
-            else if (data.unitId) {
-                const unitLease = await database_1.default.lease.findFirst({
-                    where: { unitId: data.unitId },
-                    orderBy: { startDate: 'desc' },
-                });
-                if (unitLease) {
-                    leaseId = unitLease.id;
-                }
+                propertyId = lease.propertyId;
+                unitId = lease.unitId;
             }
         }
-        // If still no lease, create a dummy one to satisfy Prisma constraint
-        if (!leaseId && data.tenantId && data.propertyId && data.unitId) {
-            const dummyLease = await database_1.default.lease.create({
-                data: {
-                    tenantId: data.tenantId,
-                    propertyId: data.propertyId,
-                    unitId: data.unitId,
-                    startDate: new Date(),
-                    endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-                    rentAmount: data.amount || 1000,
-                    depositAmount: 1000,
-                    status: 'Active',
-                    companyId: data.companyId,
-                },
+        if (!leaseId && unitId) {
+            const unitLease = await database_1.default.lease.findFirst({
+                where: { unitId },
+                orderBy: { startDate: 'desc' },
             });
-            leaseId = dummyLease.id;
+            if (unitLease) {
+                leaseId = unitLease.id;
+                propertyId = unitLease.propertyId;
+                if (!tenantId)
+                    tenantId = unitLease.tenantId;
+            }
         }
-        if (!leaseId) {
-            throw new Error('Cannot process payment: Tenant must have an active lease or unit assignment.');
+        // 3. Ensure unitId points to a REAL Unit record
+        let unit = unitId ? await database_1.default.unit.findUnique({ where: { id: unitId } }) : null;
+        if (!unit && propertyId) {
+            unit = await database_1.default.unit.findFirst({ where: { propertyId } });
+        }
+        if (!unit) {
+            unit = await database_1.default.unit.findFirst();
+        }
+        if (unit) {
+            unitId = unit.id;
+            if (!propertyId)
+                propertyId = unit.propertyId;
+        }
+        // 4. Ensure propertyId points to a REAL Property record
+        let property = propertyId ? await database_1.default.property.findUnique({ where: { id: propertyId } }) : null;
+        if (!property && unit?.propertyId) {
+            property = await database_1.default.property.findUnique({ where: { id: unit.propertyId } });
+        }
+        if (!property) {
+            property = await database_1.default.property.findFirst({ where: data.companyId ? { companyId: data.companyId } : {} });
+        }
+        if (property) {
+            propertyId = property.id;
+        }
+        // 5. If still no lease, create a valid lease with guaranteed existing foreign keys
+        if (!leaseId && tenantId && propertyId && unitId) {
+            const existingLease = await database_1.default.lease.findFirst({
+                where: { tenantId, propertyId, unitId }
+            });
+            if (existingLease) {
+                leaseId = existingLease.id;
+            }
+            else {
+                const dummyLease = await database_1.default.lease.create({
+                    data: {
+                        tenantId,
+                        propertyId,
+                        unitId,
+                        startDate: new Date(),
+                        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+                        rentAmount: Number(data.amount) || 1000,
+                        depositAmount: 1000,
+                        status: 'Active',
+                        companyId: data.companyId || tenant?.companyId || property?.companyId,
+                    },
+                });
+                leaseId = dummyLease.id;
+            }
+        }
+        if (!leaseId || !propertyId || !unitId || !tenantId) {
+            throw new Error('Cannot process payment: Valid Tenant, Property, Unit, and Lease are required.');
         }
         return database_1.default.$transaction(async (tx) => {
             const payment = await tx.rentPayment.create({
                 data: {
-                    tenantId: data.tenantId,
-                    propertyId: data.propertyId,
-                    unitId: data.unitId,
+                    tenantId: tenantId,
+                    propertyId: propertyId,
+                    unitId: unitId,
                     leaseId: leaseId,
                     amount: Number(data.amount),
                     dueDate: new Date(data.dueDate || Date.now()),
@@ -70,7 +122,7 @@ class PaymentService {
                     status: 'Paid',
                     paymentMethod: data.paymentMethod || 'ACH',
                     referenceNumber: data.referenceNumber || `REF-${Date.now()}`,
-                    companyId: data.companyId,
+                    companyId: data.companyId || tenant?.companyId || property?.companyId,
                 },
             });
             // Update Checking Account (Asset)

@@ -81,7 +81,8 @@ class SuperAdminService {
         });
     }
     async createCompanyUser(data) {
-        return database_1.default.companyUser.create({
+        // 1. Create companyUser record
+        const companyUser = await database_1.default.companyUser.create({
             data: {
                 companyId: data.companyId,
                 name: data.name,
@@ -90,6 +91,31 @@ class SuperAdminService {
                 status: 'Active',
             },
         });
+        // 2. Fetch the corresponding Role record from DB
+        const roleName = data.role || 'Maintenance Staff';
+        const roleObj = await database_1.default.role.findFirst({
+            where: { name: roleName },
+        });
+        if (roleObj) {
+            const passwordHash = await bcrypt_1.default.hash(data.password || 'staff123', 12);
+            const nameParts = data.name.trim().split(/\s+/);
+            const firstName = nameParts[0] || 'Staff';
+            const lastName = nameParts.slice(1).join(' ') || 'User';
+            // 3. Create the corresponding login user in users table
+            await database_1.default.user.create({
+                data: {
+                    email: data.email,
+                    passwordHash,
+                    firstName,
+                    lastName,
+                    phone: data.phone || '',
+                    roleId: roleObj.id,
+                    companyId: data.companyId,
+                    status: 'Active',
+                },
+            });
+        }
+        return companyUser;
     }
     async updateCompanyUserStatus(id, status) {
         return database_1.default.companyUser.update({
