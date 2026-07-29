@@ -19,7 +19,8 @@ app.use((0, cors_1.default)({
     origin: [
         'http://localhost:5173',
         'http://localhost:5174',
-        'https://doorloop-software.netlify.app/'
+        'https://doorloop-software.netlify.app',
+        'https://doorloop-software.netlify.app/',
     ],
     credentials: true,
 }));

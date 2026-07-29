@@ -93,20 +93,24 @@ class SuperAdminService {
     }
     async createCompanyUser(data) {
         let finalCompanyId = await (0, companyHelper_1.getManagerCompanyId)(undefined, data.companyId);
+        // Map user-facing "Maintenance" role to "Maintenance Staff"
+        let mappedRole = data.role || 'Admin';
+        if (mappedRole === 'Maintenance') {
+            mappedRole = 'Maintenance Staff';
+        }
         // 1. Create companyUser record
         const companyUser = await database_1.default.companyUser.create({
             data: {
                 companyId: finalCompanyId,
                 name: data.name,
                 email: data.email,
-                role: data.role || 'Admin',
+                role: mappedRole,
                 status: 'Active',
             },
         });
         // 2. Fetch the corresponding Role record from DB
-        const roleName = data.role || 'Maintenance Staff';
         const roleObj = await database_1.default.role.findFirst({
-            where: { name: roleName },
+            where: { name: mappedRole },
         });
         if (roleObj) {
             const passwordHash = await bcrypt_1.default.hash(data.password || 'staff123', 12);
@@ -126,8 +130,8 @@ class SuperAdminService {
                     status: 'Active',
                 },
             });
-            // Automatically create matching Vendor record if the role is Maintenance Staff or Maintenance
-            if (roleName === 'Maintenance Staff' || roleName === 'Maintenance') {
+            // Automatically create matching Vendor record if the role is Maintenance Staff
+            if (mappedRole === 'Maintenance Staff') {
                 const existingVendor = await database_1.default.vendor.findFirst({
                     where: { email: data.email },
                 });
