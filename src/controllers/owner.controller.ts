@@ -22,7 +22,7 @@ export class OwnerController {
 
   async create(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const { name, firstName, lastName, email, phone, payoutMethod, password } = req.body;
+      const { name, firstName, lastName, email, phone, payoutMethod, password, propertiesOwned } = req.body;
       const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
       const companyId = req.user?.companyId;
       const owner = await prisma.owner.create({
@@ -34,6 +34,13 @@ export class OwnerController {
           companyId,
         },
       });
+
+      if (Array.isArray(propertiesOwned) && propertiesOwned.length > 0) {
+        await prisma.property.updateMany({
+          where: { id: { in: propertiesOwned } },
+          data: { ownerId: owner.id },
+        });
+      }
 
       if (password) {
         let role = await prisma.role.findUnique({
@@ -69,7 +76,7 @@ export class OwnerController {
   async update(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-      const { name, firstName, lastName, email, phone, payoutMethod, password } = req.body;
+      const { name, firstName, lastName, email, phone, payoutMethod, password, propertiesOwned } = req.body;
       const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
       const companyId = req.user?.companyId;
 
@@ -86,6 +93,15 @@ export class OwnerController {
           payoutMethod,
         },
       });
+
+      if (Array.isArray(propertiesOwned)) {
+        if (propertiesOwned.length > 0) {
+          await prisma.property.updateMany({
+            where: { id: { in: propertiesOwned } },
+            data: { ownerId: owner.id },
+          });
+        }
+      }
 
       if (password && oldOwner) {
         const passwordHash = await bcrypt.hash(password, 12);

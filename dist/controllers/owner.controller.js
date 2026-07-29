@@ -25,7 +25,7 @@ class OwnerController {
     }
     async create(req, res, next) {
         try {
-            const { name, firstName, lastName, email, phone, payoutMethod, password } = req.body;
+            const { name, firstName, lastName, email, phone, payoutMethod, password, propertiesOwned } = req.body;
             const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
             const companyId = req.user?.companyId;
             const owner = await database_js_1.default.owner.create({
@@ -37,6 +37,12 @@ class OwnerController {
                     companyId,
                 },
             });
+            if (Array.isArray(propertiesOwned) && propertiesOwned.length > 0) {
+                await database_js_1.default.property.updateMany({
+                    where: { id: { in: propertiesOwned } },
+                    data: { ownerId: owner.id },
+                });
+            }
             if (password) {
                 let role = await database_js_1.default.role.findUnique({
                     where: { name: 'Owner' },
@@ -70,7 +76,7 @@ class OwnerController {
     async update(req, res, next) {
         try {
             const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-            const { name, firstName, lastName, email, phone, payoutMethod, password } = req.body;
+            const { name, firstName, lastName, email, phone, payoutMethod, password, propertiesOwned } = req.body;
             const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
             const companyId = req.user?.companyId;
             const oldOwner = await database_js_1.default.owner.findUnique({
@@ -85,6 +91,14 @@ class OwnerController {
                     payoutMethod,
                 },
             });
+            if (Array.isArray(propertiesOwned)) {
+                if (propertiesOwned.length > 0) {
+                    await database_js_1.default.property.updateMany({
+                        where: { id: { in: propertiesOwned } },
+                        data: { ownerId: owner.id },
+                    });
+                }
+            }
             if (password && oldOwner) {
                 const passwordHash = await bcrypt_1.default.hash(password, 12);
                 const [first = '', ...lastParts] = resolvedName.split(' ');

@@ -8,10 +8,46 @@ const database_1 = __importDefault(require("../config/database"));
 const appError_1 = require("../utils/appError");
 class AccountingService {
     async getChartOfAccounts(companyId) {
-        return database_1.default.coAAccount.findMany({
+        let accounts = await database_1.default.coAAccount.findMany({
             where: companyId ? { companyId } : {},
             orderBy: { accountCode: 'asc' },
         });
+        const hasIncome = accounts.some(a => a.type === 'Revenue' || a.type === 'Income');
+        const hasExpense = accounts.some(a => a.type === 'Expense' || a.type === 'Expenses');
+        if (accounts.length === 0 || !hasIncome || !hasExpense) {
+            const defaultAccounts = [
+                { accountCode: '1010', accountName: 'Operating Checking Account', type: 'Asset', balance: 150000 },
+                { accountCode: '1020', accountName: 'Security Deposit Escrow Account', type: 'Asset', balance: 45000 },
+                { accountCode: '2010', accountName: 'Accounts Payable (AP)', type: 'Liability', balance: 12000 },
+                { accountCode: '2020', accountName: 'Tenant Security Deposit Liability', type: 'Liability', balance: 45000 },
+                { accountCode: '3010', accountName: "Owner's Equity Capital", type: 'Equity', balance: 500000 },
+                { accountCode: '4010', accountName: 'Rental Revenue Income', type: 'Revenue', balance: 220000 },
+                { accountCode: '4020', accountName: 'Late Fee & Penalty Income', type: 'Revenue', balance: 4500 },
+                { accountCode: '4030', accountName: 'Application & Screening Fee Income', type: 'Revenue', balance: 2800 },
+                { accountCode: '5010', accountName: 'Maintenance & Repair Expense', type: 'Expense', balance: 25000 },
+                { accountCode: '5020', accountName: 'Property Insurance Expense', type: 'Expense', balance: 18000 },
+                { accountCode: '5030', accountName: 'Utility & Water Expense', type: 'Expense', balance: 12500 },
+                { accountCode: '5040', accountName: 'Management & Administrative Fee', type: 'Expense', balance: 35000 },
+            ];
+            for (const acc of defaultAccounts) {
+                const exists = await database_1.default.coAAccount.findFirst({
+                    where: companyId ? { companyId, accountCode: acc.accountCode } : { accountCode: acc.accountCode },
+                });
+                if (!exists) {
+                    await database_1.default.coAAccount.create({
+                        data: {
+                            ...acc,
+                            companyId,
+                        },
+                    });
+                }
+            }
+            accounts = await database_1.default.coAAccount.findMany({
+                where: companyId ? { companyId } : {},
+                orderBy: { accountCode: 'asc' },
+            });
+        }
+        return accounts;
     }
     async createAccount(data, companyId) {
         return database_1.default.coAAccount.create({

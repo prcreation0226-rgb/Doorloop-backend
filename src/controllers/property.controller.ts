@@ -7,7 +7,7 @@ export class PropertyController {
   async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const companyId = req.user?.companyId;
-      const properties = await propertyService.getAllProperties(companyId);
+      const properties = await propertyService.getAllProperties(companyId, req.user);
       return sendSuccess({ res, data: properties });
     } catch (error) {
       next(error);

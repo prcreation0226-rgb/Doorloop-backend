@@ -7,12 +7,38 @@ exports.portalController = exports.PortalController = void 0;
 const database_1 = __importDefault(require("../config/database"));
 const apiResponse_1 = require("../utils/apiResponse");
 class PortalController {
+    // --- Helper to get tenant for logged in user ---
+    async getTenantForUser(req) {
+        const userEmail = req.user?.email;
+        if (!userEmail)
+            return null;
+        return database_1.default.tenant.findFirst({
+            where: { email: userEmail },
+            include: {
+                unit: {
+                    include: {
+                        property: true,
+                    },
+                },
+                leases: {
+                    include: {
+                        property: true,
+                        unit: true,
+                    },
+                    orderBy: { startDate: 'desc' },
+                },
+            },
+        });
+    }
     // --- Tenant Portal Views ---
     async getTenantLeases(req, res, next) {
         try {
-            const companyId = req.user?.companyId;
+            const tenant = await this.getTenantForUser(req);
+            if (!tenant) {
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            }
             const leases = await database_1.default.lease.findMany({
-                where: companyId ? { companyId } : {},
+                where: { tenantId: tenant.id },
                 include: {
                     property: true,
                     unit: true,
@@ -27,46 +53,23 @@ class PortalController {
     }
     async getTenantLease(req, res, next) {
         try {
-            const companyId = req.user?.companyId;
-            const lease = await database_1.default.lease.findFirst({
-                where: companyId ? { companyId } : {},
-                include: {
-                    property: true,
-                    unit: true,
-                    tenant: true,
-                },
-            });
-            if (!lease) {
-                const firstProperty = await database_1.default.property.findFirst({
-                    where: companyId ? { companyId } : {},
-                });
-                return (0, apiResponse_1.sendSuccess)({
-                    res,
-                    data: {
-                        id: 'lease-default',
-                        propertyName: firstProperty?.name || 'Oakridge Heights',
-                        unitNumber: 'Unit 402',
-                        rentAmount: 2400,
-                        securityDeposit: 2400,
-                        leaseStart: '2025-08-01',
-                        leaseEnd: '2026-07-31',
-                        status: 'Active',
-                        tenantName: 'Alex Mercer',
-                    },
-                });
+            const tenant = await this.getTenantForUser(req);
+            if (!tenant || !tenant.leases || tenant.leases.length === 0) {
+                return (0, apiResponse_1.sendSuccess)({ res, data: null });
             }
+            const lease = tenant.leases[0];
             return (0, apiResponse_1.sendSuccess)({
                 res,
                 data: {
                     id: lease.id,
-                    propertyName: lease.property?.name || 'Oakridge Heights',
-                    unitNumber: lease.unit?.unitNumber || 'Unit 402',
-                    rentAmount: lease.rentAmount || 2400,
-                    securityDeposit: lease.depositAmount || 2400,
-                    leaseStart: lease.startDate ? new Date(lease.startDate).toISOString().split('T')[0] : '2025-08-01',
-                    leaseEnd: lease.endDate ? new Date(lease.endDate).toISOString().split('T')[0] : '2026-07-31',
+                    propertyName: lease.property?.name || 'Property',
+                    unitNumber: lease.unit ? `Unit ${lease.unit.unitNumber}` : 'Unassigned Unit',
+                    rentAmount: lease.rentAmount || 0,
+                    securityDeposit: lease.depositAmount || 0,
+                    leaseStart: lease.startDate ? new Date(lease.startDate).toISOString().split('T')[0] : '',
+                    leaseEnd: lease.endDate ? new Date(lease.endDate).toISOString().split('T')[0] : '',
                     status: lease.status || 'Active',
-                    tenantName: lease.tenant ? `${lease.tenant.firstName} ${lease.tenant.lastName}` : 'Alex Mercer',
+                    tenantName: `${tenant.firstName} ${tenant.lastName}`,
                 },
             });
         }
@@ -76,21 +79,35 @@ class PortalController {
     }
     async getTenantMetrics(req, res, next) {
         try {
-            const companyId = req.user?.companyId;
-            const firstLease = await database_1.default.lease.findFirst({
-                where: companyId ? { companyId } : {},
-                include: { property: true, unit: true },
+            const tenant = await this.getTenantForUser(req);
+            if (!tenant) {
+                return (0, apiResponse_1.sendSuccess)({
+                    res,
+                    data: {
+                        currentRent: 0,
+                        nextDueDate: 'N/A',
+                        outstandingBalance: 0,
+                        activeVisitors: 0,
+                        packagesWaiting: 0,
+                        leaseExpiration: 'N/A',
+                    },
+                });
+            }
+            const activeLease = tenant.leases && tenant.leases.length > 0 ? tenant.leases[0] : null;
+            const rent = activeLease?.rentAmount || 0;
+            const unpaidInvoices = await database_1.default.invoice.findMany({
+                where: { tenantId: tenant.id, status: { in: ['Sent', 'Overdue', 'Partially Paid'] } },
             });
-            const rent = firstLease?.rentAmount || 2400;
+            const balance = unpaidInvoices.reduce((sum, inv) => sum + (inv.balance || 0), 0);
             return (0, apiResponse_1.sendSuccess)({
                 res,
                 data: {
                     currentRent: rent,
-                    nextDueDate: 'August 1, 2026',
-                    outstandingBalance: 0,
-                    activeVisitors: 2,
-                    packagesWaiting: 1,
-                    leaseExpiration: 'July 31, 2026',
+                    nextDueDate: activeLease?.endDate ? new Date(activeLease.endDate).toISOString().split('T')[0] : 'N/A',
+                    outstandingBalance: balance,
+                    activeVisitors: 0,
+                    packagesWaiting: 0,
+                    leaseExpiration: activeLease?.endDate ? new Date(activeLease.endDate).toISOString().split('T')[0] : 'N/A',
                 },
             });
         }
@@ -100,18 +117,18 @@ class PortalController {
     }
     async getTenantProfile(req, res, next) {
         try {
-            const companyId = req.user?.companyId;
-            let tenant = await database_1.default.tenant.findFirst({
-                where: companyId ? { companyId } : {},
-            });
+            const tenant = await this.getTenantForUser(req);
             if (!tenant) {
-                tenant = await database_1.default.tenant.create({
+                return (0, apiResponse_1.sendSuccess)({
+                    res,
                     data: {
-                        firstName: 'Alex',
-                        lastName: 'Mercer',
-                        email: `alex.m.${Date.now()}@residence.com`,
-                        phone: '(555) 234-5678',
-                        companyId,
+                        id: 'none',
+                        firstName: 'Tenant',
+                        lastName: 'User',
+                        email: req.user?.email || '',
+                        phone: '',
+                        unitNumber: 'N/A',
+                        emergencyContact: 'N/A',
                     },
                 });
             }
@@ -123,8 +140,8 @@ class PortalController {
                     lastName: tenant.lastName,
                     email: tenant.email,
                     phone: tenant.phone,
-                    unitNumber: 'Unit 402',
-                    emergencyContact: 'Sarah Mercer (555-987-6543)',
+                    unitNumber: tenant.unit ? `Unit ${tenant.unit.unitNumber}` : 'Unassigned',
+                    emergencyContact: 'Emergency Contact Available',
                 },
             });
         }
@@ -135,32 +152,26 @@ class PortalController {
     async updateTenantProfile(req, res, next) {
         try {
             const { firstName, lastName, email, phone } = req.body;
-            const companyId = req.user?.companyId;
+            const userEmail = req.user?.email;
+            if (!userEmail)
+                throw new Error('Unauthorized');
             let tenant = await database_1.default.tenant.findFirst({
-                where: companyId ? { companyId } : {},
+                where: { email: userEmail },
+                include: { unit: true },
             });
             if (!tenant) {
-                tenant = await database_1.default.tenant.create({
-                    data: {
-                        firstName: firstName || 'Alex',
-                        lastName: lastName || 'Mercer',
-                        email: email || `alex.m.${Date.now()}@residence.com`,
-                        phone: phone || '(555) 234-5678',
-                        companyId,
-                    },
-                });
+                throw new Error('Tenant profile not found for logged in email.');
             }
-            else {
-                tenant = await database_1.default.tenant.update({
-                    where: { id: tenant.id },
-                    data: {
-                        firstName: firstName || tenant.firstName,
-                        lastName: lastName || tenant.lastName,
-                        email: email || tenant.email,
-                        phone: phone || tenant.phone,
-                    },
-                });
-            }
+            tenant = await database_1.default.tenant.update({
+                where: { id: tenant.id },
+                data: {
+                    firstName: firstName || tenant.firstName,
+                    lastName: lastName || tenant.lastName,
+                    email: email || tenant.email,
+                    phone: phone || tenant.phone,
+                },
+                include: { unit: true },
+            });
             return (0, apiResponse_1.sendSuccess)({
                 res,
                 data: {
@@ -169,8 +180,8 @@ class PortalController {
                     lastName: tenant.lastName,
                     email: tenant.email,
                     phone: tenant.phone,
-                    unitNumber: 'Unit 402',
-                    emergencyContact: 'Sarah Mercer (555-987-6543)',
+                    unitNumber: tenant.unit ? `Unit ${tenant.unit.unitNumber}` : 'Unassigned',
+                    emergencyContact: 'Emergency Contact Available',
                 },
             });
         }
@@ -180,39 +191,31 @@ class PortalController {
     }
     async getTenantMaintenance(req, res, next) {
         try {
-            let orders = await database_1.default.workOrder.findMany({
+            const tenant = await this.getTenantForUser(req);
+            if (!tenant) {
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            }
+            const tenantName = `${tenant.firstName} ${tenant.lastName}`;
+            const orders = await database_1.default.workOrder.findMany({
+                where: tenant.unitId ? {
+                    OR: [
+                        { propertyId: tenant.unit?.propertyId },
+                        { description: { contains: tenantName } }
+                    ]
+                } : { description: { contains: tenantName } },
                 include: {
                     property: true,
                 },
                 orderBy: { createdAt: 'desc' },
             });
-            if (orders.length === 0) {
-                const firstProperty = await database_1.default.property.findFirst();
-                if (firstProperty) {
-                    await database_1.default.workOrder.create({
-                        data: {
-                            title: 'Leaking Faucet in Bathroom',
-                            description: 'The bathroom sink faucet has a continuous drip that needs repair.',
-                            status: 'Open',
-                            priority: 'Normal',
-                            propertyId: firstProperty.id,
-                            estimatedCost: 150,
-                        },
-                    });
-                    orders = await database_1.default.workOrder.findMany({
-                        include: { property: true },
-                        orderBy: { createdAt: 'desc' },
-                    });
-                }
-            }
             const formatted = orders.map((wo) => ({
                 id: wo.id,
                 title: wo.title,
-                propertyName: wo.property?.name || 'Oakridge Heights',
-                unitName: 'Unit 402',
+                propertyName: wo.property?.name || 'Property',
+                unitName: tenant.unit ? `Unit ${tenant.unit.unitNumber}` : 'Unit',
                 priority: wo.priority || 'Medium',
                 status: wo.status || 'Open',
-                date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : '2026-07-20',
+                date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 description: wo.description || '',
                 preferredTime: 'Morning (8AM - 12PM)',
             }));
@@ -224,37 +227,11 @@ class PortalController {
     }
     async createTenantMaintenance(req, res, next) {
         try {
+            const tenant = await this.getTenantForUser(req);
             const { title, priority, description, preferredTime } = req.body;
-            let firstProperty = await database_1.default.property.findFirst();
-            if (!firstProperty) {
-                const owner = await database_1.default.owner.findFirst();
-                let ownerId = owner?.id;
-                if (!ownerId) {
-                    const newOwner = await database_1.default.owner.create({
-                        data: {
-                            name: 'Primary Owner',
-                            email: 'owner@apexpm.com',
-                            phone: '555-0100',
-                        },
-                    });
-                    ownerId = newOwner.id;
-                }
-                firstProperty = await database_1.default.property.create({
-                    data: {
-                        name: 'Oakridge Heights',
-                        address: '100 Main St, Austin, TX 78701',
-                        streetAddress: '100 Main St',
-                        city: 'Austin',
-                        state: 'TX',
-                        zip: '78701',
-                        yearBuilt: 2018,
-                        squareFootage: 12000,
-                        purchasePrice: 1500000,
-                        currentValue: 1800000,
-                        ownerId: ownerId,
-                    },
-                });
-            }
+            const propertyId = tenant?.unit?.propertyId || (await database_1.default.property.findFirst())?.id;
+            if (!propertyId)
+                throw new Error('No property available for maintenance request.');
             let mappedPriority = 'Normal';
             if (priority === 'Low')
                 mappedPriority = 'Low';
@@ -264,15 +241,17 @@ class PortalController {
                 mappedPriority = 'Emergency';
             else
                 mappedPriority = 'Normal';
+            const tenantName = tenant ? `${tenant.firstName} ${tenant.lastName}` : 'Tenant';
             const newOrder = await database_1.default.workOrder.create({
                 data: {
                     title: title || 'General Repair Request',
-                    description: description || '',
+                    description: `${description || ''} (Requested by: ${tenantName})`,
                     priority: mappedPriority,
                     status: 'Open',
-                    propertyId: firstProperty.id,
+                    propertyId: propertyId,
                     estimatedCost: 150,
                 },
+                include: { property: true },
             });
             return (0, apiResponse_1.sendSuccess)({
                 res,
@@ -280,8 +259,8 @@ class PortalController {
                 data: {
                     id: newOrder.id,
                     title: newOrder.title,
-                    propertyName: firstProperty.name,
-                    unitName: 'Unit 402',
+                    propertyName: newOrder.property?.name || 'Property',
+                    unitName: tenant?.unit ? `Unit ${tenant.unit.unitNumber}` : 'Unit',
                     priority: newOrder.priority,
                     status: newOrder.status,
                     date: new Date(newOrder.createdAt).toISOString().split('T')[0],
@@ -296,27 +275,19 @@ class PortalController {
     }
     async getTenantDocuments(req, res, next) {
         try {
-            let docs = await database_1.default.tenantDocument.findMany({
+            const tenant = await this.getTenantForUser(req);
+            if (!tenant) {
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            }
+            const docs = await database_1.default.tenantDocument.findMany({
+                where: { tenantId: tenant.id },
                 orderBy: { uploadedAt: 'desc' },
             });
-            if (docs.length === 0) {
-                await database_1.default.tenantDocument.createMany({
-                    data: [
-                        { name: 'Lease_Agreement_Oakridge_Unit402.pdf', category: 'Rental Agreement', size: '2.8 MB' },
-                        { name: 'Renter_Insurance_Policy_2026.pdf', category: 'Insurance Policy', size: '1.4 MB' },
-                        { name: 'MoveIn_Condition_Checklist.pdf', category: 'Inspection', size: '3.2 MB' },
-                        { name: 'MoveIn_Deposit_Receipt.pdf', category: 'Receipts', size: '0.8 MB' },
-                    ],
-                });
-                docs = await database_1.default.tenantDocument.findMany({
-                    orderBy: { uploadedAt: 'desc' },
-                });
-            }
             const formatted = docs.map((d) => ({
                 id: d.id,
                 name: d.name,
                 category: d.category,
-                uploadedAt: d.uploadedAt ? new Date(d.uploadedAt).toISOString().split('T')[0] : '2026-07-20',
+                uploadedAt: d.uploadedAt ? new Date(d.uploadedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 size: d.size || '1.5 MB',
             }));
             return (0, apiResponse_1.sendSuccess)({ res, data: formatted });
@@ -327,12 +298,14 @@ class PortalController {
     }
     async uploadTenantDocument(req, res, next) {
         try {
+            const tenant = await this.getTenantForUser(req);
             const { name, category, size } = req.body;
             const newDoc = await database_1.default.tenantDocument.create({
                 data: {
                     name: name || 'Tenant_Document.pdf',
                     category: category || 'Rental Agreement',
                     size: size || '1.5 MB',
+                    tenantId: tenant?.id || undefined,
                 },
             });
             return (0, apiResponse_1.sendSuccess)({
@@ -351,18 +324,42 @@ class PortalController {
             next(error);
         }
     }
+    // --- Helper to get properties assigned to the logged-in owner ---
+    async getPropertiesForOwner(req) {
+        const userEmail = req.user?.email;
+        if (!userEmail)
+            return [];
+        const owner = await database_1.default.owner.findFirst({
+            where: { email: userEmail },
+        });
+        if (!owner)
+            return [];
+        return database_1.default.property.findMany({
+            where: { ownerId: owner.id },
+            include: { units: true, buildings: true },
+        });
+    }
     // --- Owner Portal Views ---
     async getOwnerFinancials(req, res, next) {
         try {
-            const properties = await database_1.default.property.findMany();
-            const formatted = properties.map((p, idx) => ({
+            const properties = await this.getPropertiesForOwner(req);
+            const propertyIds = properties.map((p) => p.id);
+            if (propertyIds.length === 0) {
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            }
+            const payments = await database_1.default.rentPayment.findMany({
+                where: { propertyId: { in: propertyIds } },
+                include: { property: true, tenant: true },
+                orderBy: { paidDate: 'desc' },
+            });
+            const formatted = payments.map((p) => ({
                 id: p.id,
-                date: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '2026-07-20',
-                propertyName: p.name,
-                tenantName: `Tenant Unit ${idx + 1}`,
+                date: p.paidDate ? new Date(p.paidDate).toISOString().split('T')[0] : (p.dueDate ? new Date(p.dueDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+                propertyName: p.property?.name || 'Property',
+                tenantName: p.tenant ? `${p.tenant.firstName} ${p.tenant.lastName}` : 'Resident',
                 category: 'Rental Income',
-                amount: p.currentValue ? Math.round(p.currentValue / 500) : 2400,
-                status: 'Cleared',
+                amount: p.amount,
+                status: p.status || 'Cleared',
             }));
             return (0, apiResponse_1.sendSuccess)({ res, data: formatted });
         }
@@ -372,37 +369,22 @@ class PortalController {
     }
     async getOwnerDistributions(req, res, next) {
         try {
-            let distributions = await database_1.default.ownerDistribution.findMany({
-                include: { owner: true },
+            const userEmail = req.user?.email;
+            if (!userEmail)
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            const owner = await database_1.default.owner.findFirst({ where: { email: userEmail } });
+            if (!owner) {
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            }
+            const distributions = await database_1.default.ownerDistribution.findMany({
+                where: { ownerId: owner.id },
                 orderBy: { processedDate: 'desc' },
             });
-            if (distributions.length === 0) {
-                const firstOwner = await database_1.default.owner.findFirst();
-                let ownerId = firstOwner?.id;
-                if (!ownerId) {
-                    const newOwner = await database_1.default.owner.create({
-                        data: { name: 'Primary Investor', email: 'investor@apexpm.com', phone: '555-0100' },
-                    });
-                    ownerId = newOwner.id;
-                }
-                await database_1.default.ownerDistribution.createMany({
-                    data: [
-                        { ownerId, period: 'Northside Industrial', amount: 4800, status: 'Paid' },
-                        { ownerId, period: 'Summit Townhomes', amount: 4800, status: 'Paid' },
-                        { ownerId, period: 'Sunset Villas', amount: 4800, status: 'Paid' },
-                        { ownerId, period: 'Highland Heights Portfolio', amount: 2400, status: 'Paid' },
-                    ],
-                });
-                distributions = await database_1.default.ownerDistribution.findMany({
-                    include: { owner: true },
-                    orderBy: { processedDate: 'desc' },
-                });
-            }
             const formatted = distributions.map((d, idx) => ({
                 id: d.id,
                 distributionNumber: `DIST-${1000 + idx}`,
-                propertyName: d.period || 'Managed Property Asset',
-                date: d.processedDate ? new Date(d.processedDate).toISOString().split('T')[0] : '2026-07-20',
+                propertyName: d.period || 'Assigned Property Asset',
+                date: d.processedDate ? new Date(d.processedDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 amount: d.amount,
                 method: 'Direct Deposit',
                 status: d.status || 'Paid',
@@ -415,13 +397,21 @@ class PortalController {
     }
     async getOwnerStatements(req, res, next) {
         try {
-            const properties = await database_1.default.property.findMany();
+            const properties = await this.getPropertiesForOwner(req);
+            const propertyIds = properties.map((p) => p.id);
+            if (propertyIds.length === 0) {
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            }
+            const payments = await database_1.default.rentPayment.findMany({
+                where: { propertyId: { in: propertyIds } },
+            });
             const statements = properties.map((p) => {
-                const income = p.currentValue ? Math.round(p.currentValue / 500) : 2400;
-                const expenses = Math.round(income * 0.15);
+                const propPayments = payments.filter((pay) => pay.propertyId === p.id);
+                const income = propPayments.reduce((sum, pay) => sum + pay.amount, 0);
+                const expenses = Math.round(income * 0.1);
                 return {
                     id: `stmt-${p.id}`,
-                    period: 'July 2026',
+                    period: 'Current Period',
                     propertyName: p.name,
                     openingBalance: 0,
                     totalIncome: income,
@@ -429,7 +419,7 @@ class PortalController {
                     netDistribution: income - expenses,
                     endingBalance: 0,
                     status: 'Published',
-                    generatedDate: '2026-07-20',
+                    generatedDate: new Date().toISOString().split('T')[0],
                 };
             });
             return (0, apiResponse_1.sendSuccess)({ res, data: statements });
@@ -440,20 +430,26 @@ class PortalController {
     }
     async getOwnerMaintenance(req, res, next) {
         try {
+            const properties = await this.getPropertiesForOwner(req);
+            const propertyIds = properties.map((p) => p.id);
+            if (propertyIds.length === 0) {
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            }
             const workOrders = await database_1.default.workOrder.findMany({
+                where: { propertyId: { in: propertyIds } },
                 include: { property: true },
                 orderBy: { createdAt: 'desc' },
             });
             const formatted = workOrders.map((wo) => ({
                 id: wo.id,
                 title: wo.title,
-                propertyName: wo.property?.name || 'Oakridge Heights',
-                unitName: 'Unit A1',
+                propertyName: wo.property?.name || 'Property',
+                unitName: 'Unit',
                 priority: wo.priority || 'Normal',
                 status: wo.status || 'Open',
-                date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : '2026-07-20',
+                date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 description: wo.description || '',
-                estimatedCost: wo.estimatedCost || 250,
+                estimatedCost: wo.estimatedCost || 0,
             }));
             return (0, apiResponse_1.sendSuccess)({ res, data: formatted });
         }
@@ -463,27 +459,21 @@ class PortalController {
     }
     async getOwnerDocuments(req, res, next) {
         try {
-            let docs = await database_1.default.ownerDocument.findMany({
+            const userEmail = req.user?.email;
+            if (!userEmail)
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            const owner = await database_1.default.owner.findFirst({ where: { email: userEmail } });
+            if (!owner)
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            const docs = await database_1.default.ownerDocument.findMany({
+                where: { ownerId: owner.id },
                 orderBy: { uploadedAt: 'desc' },
             });
-            if (docs.length === 0) {
-                await database_1.default.ownerDocument.createMany({
-                    data: [
-                        { name: 'Owner_Operating_Agreement_2026.pdf', category: 'Legal', size: '2.4 MB' },
-                        { name: 'Property_Tax_Assessment_Q2.pdf', category: 'Tax', size: '1.8 MB' },
-                        { name: 'Monthly_Distribution_Statement_Jul2026.pdf', category: 'Statements', size: '3.1 MB' },
-                        { name: 'Building_Insurance_Policy_2026.pdf', category: 'Insurance', size: '4.5 MB' },
-                    ],
-                });
-                docs = await database_1.default.ownerDocument.findMany({
-                    orderBy: { uploadedAt: 'desc' },
-                });
-            }
             const formatted = docs.map((d) => ({
                 id: d.id,
                 name: d.name,
                 category: d.category,
-                uploadedAt: d.uploadedAt ? new Date(d.uploadedAt).toISOString().split('T')[0] : '2026-07-20',
+                uploadedAt: d.uploadedAt ? new Date(d.uploadedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 size: d.size || '1.5 MB',
             }));
             return (0, apiResponse_1.sendSuccess)({ res, data: formatted });
@@ -494,12 +484,15 @@ class PortalController {
     }
     async uploadOwnerDocument(req, res, next) {
         try {
+            const userEmail = req.user?.email;
+            const owner = userEmail ? await database_1.default.owner.findFirst({ where: { email: userEmail } }) : null;
             const { name, category, size } = req.body;
             const newDoc = await database_1.default.ownerDocument.create({
                 data: {
                     name: name || 'Document.pdf',
                     category: category || 'Statements',
                     size: size || '1.5 MB',
+                    ownerId: owner?.id || undefined,
                 },
             });
             return (0, apiResponse_1.sendSuccess)({
@@ -520,30 +513,21 @@ class PortalController {
     }
     async getOwnerMessages(req, res, next) {
         try {
-            let msgs = await database_1.default.ownerMessage.findMany({
+            const userEmail = req.user?.email;
+            if (!userEmail)
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            const owner = await database_1.default.owner.findFirst({ where: { email: userEmail } });
+            if (!owner)
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            const msgs = await database_1.default.ownerMessage.findMany({
+                where: {
+                    OR: [
+                        { recipient: { contains: owner.name } },
+                        { sender: { contains: owner.name } }
+                    ]
+                },
                 orderBy: { createdAt: 'desc' },
             });
-            if (msgs.length === 0) {
-                await database_1.default.ownerMessage.createMany({
-                    data: [
-                        {
-                            sender: 'Property Manager',
-                            recipient: 'William Anderson (Owner)',
-                            subject: 'Q2 Portfolio Performance Update',
-                            body: 'Hello William, your Q2 property distribution has been processed and transferred successfully.',
-                        },
-                        {
-                            sender: 'Maintenance Lead',
-                            recipient: 'William Anderson (Owner)',
-                            subject: 'Highland Heights Inspection Complete',
-                            body: 'Routine HVAC & roof inspection at Highland Heights Portfolio has been successfully completed.',
-                        },
-                    ],
-                });
-                msgs = await database_1.default.ownerMessage.findMany({
-                    orderBy: { createdAt: 'desc' },
-                });
-            }
             const formatted = msgs.map((m) => ({
                 id: m.id,
                 sender: m.sender,
@@ -560,10 +544,12 @@ class PortalController {
     }
     async composeOwnerMessage(req, res, next) {
         try {
+            const userEmail = req.user?.email;
+            const owner = userEmail ? await database_1.default.owner.findFirst({ where: { email: userEmail } }) : null;
             const { sender, recipient, subject, body } = req.body;
             const newMsg = await database_1.default.ownerMessage.create({
                 data: {
-                    sender: sender || 'William Anderson (Owner)',
+                    sender: sender || (owner ? `${owner.name} (Owner)` : 'Owner User'),
                     recipient: recipient || 'Property Manager',
                     subject: subject || 'General Inquiry',
                     body: body || '',
@@ -588,15 +574,21 @@ class PortalController {
     }
     async getOwnerProfile(req, res, next) {
         try {
-            let owner = await database_1.default.owner.findFirst();
+            const userEmail = req.user?.email;
+            let owner = userEmail ? await database_1.default.owner.findFirst({ where: { email: userEmail } }) : null;
             if (!owner) {
-                owner = await database_1.default.owner.create({
+                return (0, apiResponse_1.sendSuccess)({
+                    res,
                     data: {
-                        name: 'William Anderson',
-                        email: 'bill.a@investments.com',
-                        phone: '(212) 555-0122',
-                        streetAddress: '742 Evergreen Terrace, New York, NY',
-                        payoutMethod: 'ACH/Direct Deposit',
+                        id: 'owner-none',
+                        firstName: 'Owner',
+                        lastName: 'User',
+                        email: userEmail || '',
+                        phone: '',
+                        streetAddress: '',
+                        bankName: 'N/A',
+                        accountNumber: 'N/A',
+                        payoutStatus: 'Pending',
                     },
                 });
             }
@@ -606,12 +598,12 @@ class PortalController {
                 res,
                 data: {
                     id: owner.id,
-                    firstName: firstName || 'William',
-                    lastName: lastName || 'Anderson',
-                    email: owner.email || 'bill.a@investments.com',
-                    phone: owner.phone || '(212) 555-0122',
-                    streetAddress: owner.streetAddress || '742 Evergreen Terrace, New York, NY',
-                    bankName: 'Chase checking',
+                    firstName: firstName || 'Owner',
+                    lastName: lastName || 'User',
+                    email: owner.email,
+                    phone: owner.phone || '',
+                    streetAddress: owner.streetAddress || '',
+                    bankName: 'Checking Account',
                     accountNumber: 'XXXX-XXXX-9822',
                     payoutStatus: 'Verified',
                 },
@@ -623,42 +615,34 @@ class PortalController {
     }
     async updateOwnerProfile(req, res, next) {
         try {
+            const userEmail = req.user?.email;
             const { firstName, lastName, email, phone, streetAddress, bankName, accountNumber } = req.body;
             const inputName = [firstName, lastName].filter(Boolean).join(' ');
-            let owner = await database_1.default.owner.findFirst();
+            let owner = userEmail ? await database_1.default.owner.findFirst({ where: { email: userEmail } }) : null;
             if (!owner) {
-                owner = await database_1.default.owner.create({
-                    data: {
-                        name: inputName || 'William Anderson',
-                        email: email || 'bill.a@investments.com',
-                        phone: phone || '(212) 555-0122',
-                        streetAddress: streetAddress || '742 Evergreen Terrace, New York, NY',
-                    },
-                });
+                throw new Error('Owner profile not found for logged in user email.');
             }
-            else {
-                owner = await database_1.default.owner.update({
-                    where: { id: owner.id },
-                    data: {
-                        name: inputName || owner.name,
-                        email: email || owner.email,
-                        phone: phone || owner.phone,
-                        streetAddress: streetAddress || owner.streetAddress,
-                    },
-                });
-            }
+            owner = await database_1.default.owner.update({
+                where: { id: owner.id },
+                data: {
+                    name: inputName || owner.name,
+                    email: email || owner.email,
+                    phone: phone || owner.phone,
+                    streetAddress: streetAddress || owner.streetAddress,
+                },
+            });
             const [resFirstName = '', ...resLastNameParts] = (owner.name || '').split(' ');
             const resLastName = resLastNameParts.join(' ');
             return (0, apiResponse_1.sendSuccess)({
                 res,
                 data: {
                     id: owner.id,
-                    firstName: resFirstName || 'William',
-                    lastName: resLastName || 'Anderson',
+                    firstName: resFirstName || 'Owner',
+                    lastName: resLastName || 'User',
                     email: owner.email,
                     phone: owner.phone,
                     streetAddress: owner.streetAddress,
-                    bankName: bankName || 'Chase checking',
+                    bankName: bankName || 'Checking Account',
                     accountNumber: accountNumber || 'XXXX-XXXX-9822',
                     payoutStatus: 'Verified',
                 },
@@ -670,14 +654,19 @@ class PortalController {
     }
     async getOwnerReports(req, res, next) {
         try {
-            const properties = await database_1.default.property.findMany();
-            let revenue = 0;
-            for (const p of properties) {
-                revenue += p.currentValue ? Math.round(p.currentValue / 500) : 2400;
+            const properties = await this.getPropertiesForOwner(req);
+            const propertyIds = properties.map((p) => p.id);
+            if (propertyIds.length === 0) {
+                return (0, apiResponse_1.sendSuccess)({
+                    res,
+                    data: { revenue: 0, expenses: 0, occupancy: 0, distribution: 0 },
+                });
             }
-            if (revenue === 0)
-                revenue = 24500;
-            const expenses = Math.round(revenue * 0.15);
+            const payments = await database_1.default.rentPayment.findMany({
+                where: { propertyId: { in: propertyIds } },
+            });
+            const revenue = payments.reduce((sum, p) => sum + p.amount, 0);
+            const expenses = Math.round(revenue * 0.1);
             const distribution = revenue - expenses;
             return (0, apiResponse_1.sendSuccess)({
                 res,
@@ -695,16 +684,32 @@ class PortalController {
     }
     async getOwnerMetrics(req, res, next) {
         try {
-            const totalProperties = await database_1.default.property.count();
-            const properties = await database_1.default.property.findMany();
-            let monthlyIncome = 0;
-            for (const p of properties) {
-                monthlyIncome += p.currentValue ? Math.round(p.currentValue / 500) : 2400;
+            const properties = await this.getPropertiesForOwner(req);
+            const propertyIds = properties.map((p) => p.id);
+            if (propertyIds.length === 0) {
+                return (0, apiResponse_1.sendSuccess)({
+                    res,
+                    data: {
+                        monthlyIncome: 0,
+                        monthlyExpenses: 0,
+                        netDistribution: 0,
+                        netIncome: 0,
+                        totalProperties: 0,
+                        occupancyRate: 0,
+                        totalUnits: 0,
+                        activeLeases: 0,
+                        pendingMaintenance: 0,
+                    },
+                });
             }
-            if (monthlyIncome === 0)
-                monthlyIncome = 24500;
-            const monthlyExpenses = Math.round(monthlyIncome * 0.15);
+            const payments = await database_1.default.rentPayment.findMany({
+                where: { propertyId: { in: propertyIds } },
+            });
+            const monthlyIncome = payments.reduce((sum, p) => sum + p.amount, 0);
+            const monthlyExpenses = Math.round(monthlyIncome * 0.1);
             const netDistribution = monthlyIncome - monthlyExpenses;
+            const totalProperties = properties.length;
+            const totalUnits = properties.reduce((sum, p) => sum + (p.unitsCount || p.units?.length || 1), 0);
             return (0, apiResponse_1.sendSuccess)({
                 res,
                 data: {
@@ -713,10 +718,10 @@ class PortalController {
                     netDistribution,
                     netIncome: netDistribution,
                     totalProperties,
-                    occupancyRate: 94.5,
-                    totalUnits: totalProperties * 4,
-                    activeLeases: totalProperties * 3,
-                    pendingMaintenance: 2,
+                    occupancyRate: 95.0,
+                    totalUnits,
+                    activeLeases: totalUnits,
+                    pendingMaintenance: 0,
                 },
             });
         }
@@ -1037,7 +1042,18 @@ class PortalController {
     // --- Invoices ---
     async getInvoices(req, res, next) {
         try {
+            let whereClause = {};
+            if ((req.user?.role === 'Tenant' || req.user?.roleName === 'Tenant') && req.user?.email) {
+                const tenant = await database_1.default.tenant.findFirst({ where: { email: req.user.email } });
+                if (tenant) {
+                    whereClause.tenantId = tenant.id;
+                }
+                else {
+                    return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+                }
+            }
             const invoices = await database_1.default.invoice.findMany({
+                where: whereClause,
                 include: { tenant: true },
                 orderBy: { dueDate: 'asc' },
             });
@@ -1049,10 +1065,12 @@ class PortalController {
     }
     async createTenantMessage(req, res, next) {
         try {
+            const tenant = await this.getTenantForUser(req);
+            const tenantFullName = tenant ? `${tenant.firstName} ${tenant.lastName} (Resident)` : 'Resident';
             const { sender, recipient, subject, body } = req.body;
             const newMsg = await database_1.default.tenantMessage.create({
                 data: {
-                    sender: sender || 'Alex Mercer (Resident)',
+                    sender: sender || tenantFullName,
                     recipient: recipient || 'Property Manager Office',
                     subject: subject || 'General Inquiry',
                     body: body || '',
@@ -1120,7 +1138,18 @@ class PortalController {
     // --- Charges ---
     async getCharges(req, res, next) {
         try {
+            let whereClause = {};
+            if ((req.user?.role === 'Tenant' || req.user?.roleName === 'Tenant') && req.user?.email) {
+                const tenant = await database_1.default.tenant.findFirst({ where: { email: req.user.email } });
+                if (tenant) {
+                    whereClause.tenantId = tenant.id;
+                }
+                else {
+                    return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+                }
+            }
             const charges = await database_1.default.charge.findMany({
+                where: whereClause,
                 include: { tenant: true },
                 orderBy: { createdAt: 'desc' },
             });
@@ -1161,7 +1190,18 @@ class PortalController {
     // --- Deposits ---
     async getDeposits(req, res, next) {
         try {
+            let whereClause = {};
+            if ((req.user?.role === 'Tenant' || req.user?.roleName === 'Tenant') && req.user?.email) {
+                const tenant = await database_1.default.tenant.findFirst({ where: { email: req.user.email } });
+                if (tenant) {
+                    whereClause.tenantId = tenant.id;
+                }
+                else {
+                    return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+                }
+            }
             const deposits = await database_1.default.deposit.findMany({
+                where: whereClause,
                 include: { tenant: true },
                 orderBy: { createdAt: 'desc' },
             });

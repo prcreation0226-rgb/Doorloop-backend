@@ -4,12 +4,40 @@ import { sendSuccess } from '../utils/apiResponse';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 
 export class PortalController {
+  // --- Helper to get tenant for logged in user ---
+  private async getTenantForUser(req: AuthenticatedRequest) {
+    const userEmail = req.user?.email;
+    if (!userEmail) return null;
+
+    return prisma.tenant.findFirst({
+      where: { email: userEmail },
+      include: {
+        unit: {
+          include: {
+            property: true,
+          },
+        },
+        leases: {
+          include: {
+            property: true,
+            unit: true,
+          },
+          orderBy: { startDate: 'desc' },
+        },
+      },
+    });
+  }
+
   // --- Tenant Portal Views ---
   async getTenantLeases(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const companyId = req.user?.companyId;
+      const tenant = await this.getTenantForUser(req);
+      if (!tenant) {
+        return sendSuccess({ res, data: [] });
+      }
+
       const leases = await prisma.lease.findMany({
-        where: companyId ? { companyId } : {},
+        where: { tenantId: tenant.id },
         include: {
           property: true,
           unit: true,
@@ -24,48 +52,25 @@ export class PortalController {
 
   async getTenantLease(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const companyId = req.user?.companyId;
-      const lease = await prisma.lease.findFirst({
-        where: companyId ? { companyId } : {},
-        include: {
-          property: true,
-          unit: true,
-          tenant: true,
-        },
-      });
-
-      if (!lease) {
-        const firstProperty = await prisma.property.findFirst({
-          where: companyId ? { companyId } : {},
-        });
-        return sendSuccess({
-          res,
-          data: {
-            id: 'lease-default',
-            propertyName: firstProperty?.name || 'Oakridge Heights',
-            unitNumber: 'Unit 402',
-            rentAmount: 2400,
-            securityDeposit: 2400,
-            leaseStart: '2025-08-01',
-            leaseEnd: '2026-07-31',
-            status: 'Active',
-            tenantName: 'Alex Mercer',
-          },
-        });
+      const tenant = await this.getTenantForUser(req);
+      if (!tenant || !tenant.leases || tenant.leases.length === 0) {
+        return sendSuccess({ res, data: null });
       }
+
+      const lease = tenant.leases[0];
 
       return sendSuccess({
         res,
         data: {
           id: lease.id,
-          propertyName: lease.property?.name || 'Oakridge Heights',
-          unitNumber: lease.unit?.unitNumber || 'Unit 402',
-          rentAmount: lease.rentAmount || 2400,
-          securityDeposit: lease.depositAmount || 2400,
-          leaseStart: lease.startDate ? new Date(lease.startDate).toISOString().split('T')[0] : '2025-08-01',
-          leaseEnd: lease.endDate ? new Date(lease.endDate).toISOString().split('T')[0] : '2026-07-31',
+          propertyName: lease.property?.name || 'Property',
+          unitNumber: lease.unit ? `Unit ${lease.unit.unitNumber}` : 'Unassigned Unit',
+          rentAmount: lease.rentAmount || 0,
+          securityDeposit: lease.depositAmount || 0,
+          leaseStart: lease.startDate ? new Date(lease.startDate).toISOString().split('T')[0] : '',
+          leaseEnd: lease.endDate ? new Date(lease.endDate).toISOString().split('T')[0] : '',
           status: lease.status || 'Active',
-          tenantName: lease.tenant ? `${lease.tenant.firstName} ${lease.tenant.lastName}` : 'Alex Mercer',
+          tenantName: `${tenant.firstName} ${tenant.lastName}`,
         },
       });
     } catch (error) {
@@ -75,23 +80,38 @@ export class PortalController {
 
   async getTenantMetrics(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const companyId = req.user?.companyId;
-      const firstLease = await prisma.lease.findFirst({
-        where: companyId ? { companyId } : {},
-        include: { property: true, unit: true },
-      });
+      const tenant = await this.getTenantForUser(req);
+      if (!tenant) {
+        return sendSuccess({
+          res,
+          data: {
+            currentRent: 0,
+            nextDueDate: 'N/A',
+            outstandingBalance: 0,
+            activeVisitors: 0,
+            packagesWaiting: 0,
+            leaseExpiration: 'N/A',
+          },
+        });
+      }
 
-      const rent = firstLease?.rentAmount || 2400;
+      const activeLease = tenant.leases && tenant.leases.length > 0 ? tenant.leases[0] : null;
+      const rent = activeLease?.rentAmount || 0;
+
+      const unpaidInvoices = await prisma.invoice.findMany({
+        where: { tenantId: tenant.id, status: { in: ['Sent', 'Overdue', 'Partially Paid'] } },
+      });
+      const balance = unpaidInvoices.reduce((sum, inv) => sum + (inv.balance || 0), 0);
 
       return sendSuccess({
         res,
         data: {
           currentRent: rent,
-          nextDueDate: 'August 1, 2026',
-          outstandingBalance: 0,
-          activeVisitors: 2,
-          packagesWaiting: 1,
-          leaseExpiration: 'July 31, 2026',
+          nextDueDate: activeLease?.endDate ? new Date(activeLease.endDate).toISOString().split('T')[0] : 'N/A',
+          outstandingBalance: balance,
+          activeVisitors: 0,
+          packagesWaiting: 0,
+          leaseExpiration: activeLease?.endDate ? new Date(activeLease.endDate).toISOString().split('T')[0] : 'N/A',
         },
       });
     } catch (error) {
@@ -101,18 +121,18 @@ export class PortalController {
 
   async getTenantProfile(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const companyId = req.user?.companyId;
-      let tenant = await prisma.tenant.findFirst({
-        where: companyId ? { companyId } : {},
-      });
+      const tenant = await this.getTenantForUser(req);
       if (!tenant) {
-        tenant = await prisma.tenant.create({
+        return sendSuccess({
+          res,
           data: {
-            firstName: 'Alex',
-            lastName: 'Mercer',
-            email: `alex.m.${Date.now()}@residence.com`,
-            phone: '(555) 234-5678',
-            companyId,
+            id: 'none',
+            firstName: 'Tenant',
+            lastName: 'User',
+            email: req.user?.email || '',
+            phone: '',
+            unitNumber: 'N/A',
+            emergencyContact: 'N/A',
           },
         });
       }
@@ -125,8 +145,8 @@ export class PortalController {
           lastName: tenant.lastName,
           email: tenant.email,
           phone: tenant.phone,
-          unitNumber: 'Unit 402',
-          emergencyContact: 'Sarah Mercer (555-987-6543)',
+          unitNumber: tenant.unit ? `Unit ${tenant.unit.unitNumber}` : 'Unassigned',
+          emergencyContact: 'Emergency Contact Available',
         },
       });
     } catch (error) {
@@ -137,32 +157,28 @@ export class PortalController {
   async updateTenantProfile(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const { firstName, lastName, email, phone } = req.body;
-      const companyId = req.user?.companyId;
+      const userEmail = req.user?.email;
+      if (!userEmail) throw new Error('Unauthorized');
+
       let tenant = await prisma.tenant.findFirst({
-        where: companyId ? { companyId } : {},
+        where: { email: userEmail },
+        include: { unit: true },
       });
 
       if (!tenant) {
-        tenant = await prisma.tenant.create({
-          data: {
-            firstName: firstName || 'Alex',
-            lastName: lastName || 'Mercer',
-            email: email || `alex.m.${Date.now()}@residence.com`,
-            phone: phone || '(555) 234-5678',
-            companyId,
-          },
-        });
-      } else {
-        tenant = await prisma.tenant.update({
-          where: { id: tenant.id },
-          data: {
-            firstName: firstName || tenant.firstName,
-            lastName: lastName || tenant.lastName,
-            email: email || tenant.email,
-            phone: phone || tenant.phone,
-          },
-        });
+        throw new Error('Tenant profile not found for logged in email.');
       }
+
+      tenant = await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: {
+          firstName: firstName || tenant.firstName,
+          lastName: lastName || tenant.lastName,
+          email: email || tenant.email,
+          phone: phone || tenant.phone,
+        },
+        include: { unit: true },
+      });
 
       return sendSuccess({
         res,
@@ -172,8 +188,8 @@ export class PortalController {
           lastName: tenant.lastName,
           email: tenant.email,
           phone: tenant.phone,
-          unitNumber: 'Unit 402',
-          emergencyContact: 'Sarah Mercer (555-987-6543)',
+          unitNumber: tenant.unit ? `Unit ${tenant.unit.unitNumber}` : 'Unassigned',
+          emergencyContact: 'Emergency Contact Available',
         },
       });
     } catch (error) {
@@ -181,44 +197,35 @@ export class PortalController {
     }
   }
 
-  async getTenantMaintenance(req: Request, res: Response, next: NextFunction) {
+  async getTenantMaintenance(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      let orders = await prisma.workOrder.findMany({
+      const tenant = await this.getTenantForUser(req);
+      if (!tenant) {
+        return sendSuccess({ res, data: [] });
+      }
+
+      const tenantName = `${tenant.firstName} ${tenant.lastName}`;
+      const orders = await prisma.workOrder.findMany({
+        where: tenant.unitId ? {
+          OR: [
+            { propertyId: tenant.unit?.propertyId },
+            { description: { contains: tenantName } }
+          ]
+        } : { description: { contains: tenantName } },
         include: {
           property: true,
         },
         orderBy: { createdAt: 'desc' },
       });
 
-      if (orders.length === 0) {
-        const firstProperty = await prisma.property.findFirst();
-        if (firstProperty) {
-          await prisma.workOrder.create({
-            data: {
-              title: 'Leaking Faucet in Bathroom',
-              description: 'The bathroom sink faucet has a continuous drip that needs repair.',
-              status: 'Open',
-              priority: 'Normal',
-              propertyId: firstProperty.id,
-              estimatedCost: 150,
-            },
-          });
-
-          orders = await prisma.workOrder.findMany({
-            include: { property: true },
-            orderBy: { createdAt: 'desc' },
-          });
-        }
-      }
-
       const formatted = orders.map((wo: any) => ({
         id: wo.id,
         title: wo.title,
-        propertyName: wo.property?.name || 'Oakridge Heights',
-        unitName: 'Unit 402',
+        propertyName: wo.property?.name || 'Property',
+        unitName: tenant.unit ? `Unit ${tenant.unit.unitNumber}` : 'Unit',
         priority: wo.priority || 'Medium',
         status: wo.status || 'Open',
-        date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : '2026-07-20',
+        date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         description: wo.description || '',
         preferredTime: 'Morning (8AM - 12PM)',
       }));
@@ -229,41 +236,13 @@ export class PortalController {
     }
   }
 
-  async createTenantMaintenance(req: Request, res: Response, next: NextFunction) {
+  async createTenantMaintenance(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      const tenant = await this.getTenantForUser(req);
       const { title, priority, description, preferredTime } = req.body;
-      let firstProperty = await prisma.property.findFirst();
-
-      if (!firstProperty) {
-        const owner = await prisma.owner.findFirst();
-        let ownerId = owner?.id;
-        if (!ownerId) {
-          const newOwner = await prisma.owner.create({
-            data: {
-              name: 'Primary Owner',
-              email: 'owner@apexpm.com',
-              phone: '555-0100',
-            },
-          });
-          ownerId = newOwner.id;
-        }
-
-        firstProperty = await prisma.property.create({
-          data: {
-            name: 'Oakridge Heights',
-            address: '100 Main St, Austin, TX 78701',
-            streetAddress: '100 Main St',
-            city: 'Austin',
-            state: 'TX',
-            zip: '78701',
-            yearBuilt: 2018,
-            squareFootage: 12000,
-            purchasePrice: 1500000,
-            currentValue: 1800000,
-            ownerId: ownerId,
-          },
-        });
-      }
+      
+      const propertyId = tenant?.unit?.propertyId || (await prisma.property.findFirst())?.id;
+      if (!propertyId) throw new Error('No property available for maintenance request.');
 
       let mappedPriority: 'Low' | 'Normal' | 'High' | 'Emergency' = 'Normal';
       if (priority === 'Low') mappedPriority = 'Low';
@@ -271,15 +250,18 @@ export class PortalController {
       else if (priority === 'Emergency') mappedPriority = 'Emergency';
       else mappedPriority = 'Normal';
 
+      const tenantName = tenant ? `${tenant.firstName} ${tenant.lastName}` : 'Tenant';
+
       const newOrder = await prisma.workOrder.create({
         data: {
           title: title || 'General Repair Request',
-          description: description || '',
+          description: `${description || ''} (Requested by: ${tenantName})`,
           priority: mappedPriority,
           status: 'Open',
-          propertyId: firstProperty.id,
+          propertyId: propertyId,
           estimatedCost: 150,
         },
+        include: { property: true },
       });
 
       return sendSuccess({
@@ -288,8 +270,8 @@ export class PortalController {
         data: {
           id: newOrder.id,
           title: newOrder.title,
-          propertyName: firstProperty.name,
-          unitName: 'Unit 402',
+          propertyName: newOrder.property?.name || 'Property',
+          unitName: tenant?.unit ? `Unit ${tenant.unit.unitNumber}` : 'Unit',
           priority: newOrder.priority,
           status: newOrder.status,
           date: new Date(newOrder.createdAt).toISOString().split('T')[0],
@@ -302,32 +284,23 @@ export class PortalController {
     }
   }
 
-  async getTenantDocuments(req: Request, res: Response, next: NextFunction) {
+  async getTenantDocuments(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      let docs = await prisma.tenantDocument.findMany({
+      const tenant = await this.getTenantForUser(req);
+      if (!tenant) {
+        return sendSuccess({ res, data: [] });
+      }
+
+      const docs = await prisma.tenantDocument.findMany({
+        where: { tenantId: tenant.id },
         orderBy: { uploadedAt: 'desc' },
       });
-
-      if (docs.length === 0) {
-        await prisma.tenantDocument.createMany({
-          data: [
-            { name: 'Lease_Agreement_Oakridge_Unit402.pdf', category: 'Rental Agreement', size: '2.8 MB' },
-            { name: 'Renter_Insurance_Policy_2026.pdf', category: 'Insurance Policy', size: '1.4 MB' },
-            { name: 'MoveIn_Condition_Checklist.pdf', category: 'Inspection', size: '3.2 MB' },
-            { name: 'MoveIn_Deposit_Receipt.pdf', category: 'Receipts', size: '0.8 MB' },
-          ],
-        });
-
-        docs = await prisma.tenantDocument.findMany({
-          orderBy: { uploadedAt: 'desc' },
-        });
-      }
 
       const formatted = docs.map((d: any) => ({
         id: d.id,
         name: d.name,
         category: d.category,
-        uploadedAt: d.uploadedAt ? new Date(d.uploadedAt).toISOString().split('T')[0] : '2026-07-20',
+        uploadedAt: d.uploadedAt ? new Date(d.uploadedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         size: d.size || '1.5 MB',
       }));
 
@@ -337,14 +310,16 @@ export class PortalController {
     }
   }
 
-  async uploadTenantDocument(req: Request, res: Response, next: NextFunction) {
+  async uploadTenantDocument(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      const tenant = await this.getTenantForUser(req);
       const { name, category, size } = req.body;
       const newDoc = await prisma.tenantDocument.create({
         data: {
           name: name || 'Tenant_Document.pdf',
           category: category || 'Rental Agreement',
           size: size || '1.5 MB',
+          tenantId: tenant?.id || undefined,
         },
       });
 
@@ -364,18 +339,47 @@ export class PortalController {
     }
   }
 
+  // --- Helper to get properties assigned to the logged-in owner ---
+  private async getPropertiesForOwner(req: AuthenticatedRequest) {
+    const userEmail = req.user?.email;
+    if (!userEmail) return [];
+
+    const owner = await prisma.owner.findFirst({
+      where: { email: userEmail },
+    });
+
+    if (!owner) return [];
+
+    return prisma.property.findMany({
+      where: { ownerId: owner.id },
+      include: { units: true, buildings: true },
+    });
+  }
+
   // --- Owner Portal Views ---
-  async getOwnerFinancials(req: Request, res: Response, next: NextFunction) {
+  async getOwnerFinancials(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const properties = await prisma.property.findMany();
-      const formatted = properties.map((p: any, idx: number) => ({
+      const properties = await this.getPropertiesForOwner(req);
+      const propertyIds = properties.map((p) => p.id);
+
+      if (propertyIds.length === 0) {
+        return sendSuccess({ res, data: [] });
+      }
+
+      const payments = await prisma.rentPayment.findMany({
+        where: { propertyId: { in: propertyIds } },
+        include: { property: true, tenant: true },
+        orderBy: { paidDate: 'desc' },
+      });
+
+      const formatted = payments.map((p: any) => ({
         id: p.id,
-        date: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '2026-07-20',
-        propertyName: p.name,
-        tenantName: `Tenant Unit ${idx + 1}`,
+        date: p.paidDate ? new Date(p.paidDate).toISOString().split('T')[0] : (p.dueDate ? new Date(p.dueDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+        propertyName: p.property?.name || 'Property',
+        tenantName: p.tenant ? `${p.tenant.firstName} ${p.tenant.lastName}` : 'Resident',
         category: 'Rental Income',
-        amount: p.currentValue ? Math.round(p.currentValue / 500) : 2400,
-        status: 'Cleared',
+        amount: p.amount,
+        status: p.status || 'Cleared',
       }));
 
       return sendSuccess({ res, data: formatted });
@@ -384,43 +388,26 @@ export class PortalController {
     }
   }
 
-  async getOwnerDistributions(req: Request, res: Response, next: NextFunction) {
+  async getOwnerDistributions(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      let distributions = await prisma.ownerDistribution.findMany({
-        include: { owner: true },
+      const userEmail = req.user?.email;
+      if (!userEmail) return sendSuccess({ res, data: [] });
+
+      const owner = await prisma.owner.findFirst({ where: { email: userEmail } });
+      if (!owner) {
+        return sendSuccess({ res, data: [] });
+      }
+
+      const distributions = await prisma.ownerDistribution.findMany({
+        where: { ownerId: owner.id },
         orderBy: { processedDate: 'desc' },
       });
-
-      if (distributions.length === 0) {
-        const firstOwner = await prisma.owner.findFirst();
-        let ownerId = firstOwner?.id;
-        if (!ownerId) {
-          const newOwner = await prisma.owner.create({
-            data: { name: 'Primary Investor', email: 'investor@apexpm.com', phone: '555-0100' },
-          });
-          ownerId = newOwner.id;
-        }
-
-        await prisma.ownerDistribution.createMany({
-          data: [
-            { ownerId, period: 'Northside Industrial', amount: 4800, status: 'Paid' },
-            { ownerId, period: 'Summit Townhomes', amount: 4800, status: 'Paid' },
-            { ownerId, period: 'Sunset Villas', amount: 4800, status: 'Paid' },
-            { ownerId, period: 'Highland Heights Portfolio', amount: 2400, status: 'Paid' },
-          ],
-        });
-
-        distributions = await prisma.ownerDistribution.findMany({
-          include: { owner: true },
-          orderBy: { processedDate: 'desc' },
-        });
-      }
 
       const formatted = distributions.map((d: any, idx: number) => ({
         id: d.id,
         distributionNumber: `DIST-${1000 + idx}`,
-        propertyName: d.period || 'Managed Property Asset',
-        date: d.processedDate ? new Date(d.processedDate).toISOString().split('T')[0] : '2026-07-20',
+        propertyName: d.period || 'Assigned Property Asset',
+        date: d.processedDate ? new Date(d.processedDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         amount: d.amount,
         method: 'Direct Deposit',
         status: d.status || 'Paid',
@@ -432,15 +419,26 @@ export class PortalController {
     }
   }
 
-  async getOwnerStatements(req: Request, res: Response, next: NextFunction) {
+  async getOwnerStatements(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const properties = await prisma.property.findMany();
+      const properties = await this.getPropertiesForOwner(req);
+      const propertyIds = properties.map((p) => p.id);
+
+      if (propertyIds.length === 0) {
+        return sendSuccess({ res, data: [] });
+      }
+
+      const payments = await prisma.rentPayment.findMany({
+        where: { propertyId: { in: propertyIds } },
+      });
+
       const statements = properties.map((p: any) => {
-        const income = p.currentValue ? Math.round(p.currentValue / 500) : 2400;
-        const expenses = Math.round(income * 0.15);
+        const propPayments = payments.filter((pay) => pay.propertyId === p.id);
+        const income = propPayments.reduce((sum, pay) => sum + pay.amount, 0);
+        const expenses = Math.round(income * 0.1);
         return {
           id: `stmt-${p.id}`,
-          period: 'July 2026',
+          period: 'Current Period',
           propertyName: p.name,
           openingBalance: 0,
           totalIncome: income,
@@ -448,7 +446,7 @@ export class PortalController {
           netDistribution: income - expenses,
           endingBalance: 0,
           status: 'Published',
-          generatedDate: '2026-07-20',
+          generatedDate: new Date().toISOString().split('T')[0],
         };
       });
 
@@ -458,9 +456,17 @@ export class PortalController {
     }
   }
 
-  async getOwnerMaintenance(req: Request, res: Response, next: NextFunction) {
+  async getOwnerMaintenance(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      const properties = await this.getPropertiesForOwner(req);
+      const propertyIds = properties.map((p) => p.id);
+
+      if (propertyIds.length === 0) {
+        return sendSuccess({ res, data: [] });
+      }
+
       const workOrders = await prisma.workOrder.findMany({
+        where: { propertyId: { in: propertyIds } },
         include: { property: true },
         orderBy: { createdAt: 'desc' },
       });
@@ -468,13 +474,13 @@ export class PortalController {
       const formatted = workOrders.map((wo: any) => ({
         id: wo.id,
         title: wo.title,
-        propertyName: wo.property?.name || 'Oakridge Heights',
-        unitName: 'Unit A1',
+        propertyName: wo.property?.name || 'Property',
+        unitName: 'Unit',
         priority: wo.priority || 'Normal',
         status: wo.status || 'Open',
-        date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : '2026-07-20',
+        date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         description: wo.description || '',
-        estimatedCost: wo.estimatedCost || 250,
+        estimatedCost: wo.estimatedCost || 0,
       }));
 
       return sendSuccess({ res, data: formatted });
@@ -483,32 +489,24 @@ export class PortalController {
     }
   }
 
-  async getOwnerDocuments(req: Request, res: Response, next: NextFunction) {
+  async getOwnerDocuments(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      let docs = await prisma.ownerDocument.findMany({
+      const userEmail = req.user?.email;
+      if (!userEmail) return sendSuccess({ res, data: [] });
+
+      const owner = await prisma.owner.findFirst({ where: { email: userEmail } });
+      if (!owner) return sendSuccess({ res, data: [] });
+
+      const docs = await prisma.ownerDocument.findMany({
+        where: { ownerId: owner.id },
         orderBy: { uploadedAt: 'desc' },
       });
-
-      if (docs.length === 0) {
-        await prisma.ownerDocument.createMany({
-          data: [
-            { name: 'Owner_Operating_Agreement_2026.pdf', category: 'Legal', size: '2.4 MB' },
-            { name: 'Property_Tax_Assessment_Q2.pdf', category: 'Tax', size: '1.8 MB' },
-            { name: 'Monthly_Distribution_Statement_Jul2026.pdf', category: 'Statements', size: '3.1 MB' },
-            { name: 'Building_Insurance_Policy_2026.pdf', category: 'Insurance', size: '4.5 MB' },
-          ],
-        });
-
-        docs = await prisma.ownerDocument.findMany({
-          orderBy: { uploadedAt: 'desc' },
-        });
-      }
 
       const formatted = docs.map((d: any) => ({
         id: d.id,
         name: d.name,
         category: d.category,
-        uploadedAt: d.uploadedAt ? new Date(d.uploadedAt).toISOString().split('T')[0] : '2026-07-20',
+        uploadedAt: d.uploadedAt ? new Date(d.uploadedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         size: d.size || '1.5 MB',
       }));
 
@@ -518,14 +516,18 @@ export class PortalController {
     }
   }
 
-  async uploadOwnerDocument(req: Request, res: Response, next: NextFunction) {
+  async uploadOwnerDocument(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      const userEmail = req.user?.email;
+      const owner = userEmail ? await prisma.owner.findFirst({ where: { email: userEmail } }) : null;
       const { name, category, size } = req.body;
+
       const newDoc = await prisma.ownerDocument.create({
         data: {
           name: name || 'Document.pdf',
           category: category || 'Statements',
           size: size || '1.5 MB',
+          ownerId: owner?.id || undefined,
         },
       });
 
@@ -545,34 +547,23 @@ export class PortalController {
     }
   }
 
-  async getOwnerMessages(req: Request, res: Response, next: NextFunction) {
+  async getOwnerMessages(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      let msgs = await prisma.ownerMessage.findMany({
+      const userEmail = req.user?.email;
+      if (!userEmail) return sendSuccess({ res, data: [] });
+
+      const owner = await prisma.owner.findFirst({ where: { email: userEmail } });
+      if (!owner) return sendSuccess({ res, data: [] });
+
+      const msgs = await prisma.ownerMessage.findMany({
+        where: {
+          OR: [
+            { recipient: { contains: owner.name } },
+            { sender: { contains: owner.name } }
+          ]
+        },
         orderBy: { createdAt: 'desc' },
       });
-
-      if (msgs.length === 0) {
-        await prisma.ownerMessage.createMany({
-          data: [
-            {
-              sender: 'Property Manager',
-              recipient: 'William Anderson (Owner)',
-              subject: 'Q2 Portfolio Performance Update',
-              body: 'Hello William, your Q2 property distribution has been processed and transferred successfully.',
-            },
-            {
-              sender: 'Maintenance Lead',
-              recipient: 'William Anderson (Owner)',
-              subject: 'Highland Heights Inspection Complete',
-              body: 'Routine HVAC & roof inspection at Highland Heights Portfolio has been successfully completed.',
-            },
-          ],
-        });
-
-        msgs = await prisma.ownerMessage.findMany({
-          orderBy: { createdAt: 'desc' },
-        });
-      }
 
       const formatted = msgs.map((m: any) => ({
         id: m.id,
@@ -589,12 +580,15 @@ export class PortalController {
     }
   }
 
-  async composeOwnerMessage(req: Request, res: Response, next: NextFunction) {
+  async composeOwnerMessage(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      const userEmail = req.user?.email;
+      const owner = userEmail ? await prisma.owner.findFirst({ where: { email: userEmail } }) : null;
+
       const { sender, recipient, subject, body } = req.body;
       const newMsg = await prisma.ownerMessage.create({
         data: {
-          sender: sender || 'William Anderson (Owner)',
+          sender: sender || (owner ? `${owner.name} (Owner)` : 'Owner User'),
           recipient: recipient || 'Property Manager',
           subject: subject || 'General Inquiry',
           body: body || '',
@@ -618,17 +612,24 @@ export class PortalController {
     }
   }
 
-  async getOwnerProfile(req: Request, res: Response, next: NextFunction) {
+  async getOwnerProfile(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      let owner = await prisma.owner.findFirst();
+      const userEmail = req.user?.email;
+      let owner = userEmail ? await prisma.owner.findFirst({ where: { email: userEmail } }) : null;
+
       if (!owner) {
-        owner = await prisma.owner.create({
+        return sendSuccess({
+          res,
           data: {
-            name: 'William Anderson',
-            email: 'bill.a@investments.com',
-            phone: '(212) 555-0122',
-            streetAddress: '742 Evergreen Terrace, New York, NY',
-            payoutMethod: 'ACH/Direct Deposit',
+            id: 'owner-none',
+            firstName: 'Owner',
+            lastName: 'User',
+            email: userEmail || '',
+            phone: '',
+            streetAddress: '',
+            bankName: 'N/A',
+            accountNumber: 'N/A',
+            payoutStatus: 'Pending',
           },
         });
       }
@@ -640,12 +641,12 @@ export class PortalController {
         res,
         data: {
           id: owner.id,
-          firstName: firstName || 'William',
-          lastName: lastName || 'Anderson',
-          email: owner.email || 'bill.a@investments.com',
-          phone: owner.phone || '(212) 555-0122',
-          streetAddress: owner.streetAddress || '742 Evergreen Terrace, New York, NY',
-          bankName: 'Chase checking',
+          firstName: firstName || 'Owner',
+          lastName: lastName || 'User',
+          email: owner.email,
+          phone: owner.phone || '',
+          streetAddress: owner.streetAddress || '',
+          bankName: 'Checking Account',
           accountNumber: 'XXXX-XXXX-9822',
           payoutStatus: 'Verified',
         },
@@ -655,32 +656,27 @@ export class PortalController {
     }
   }
 
-  async updateOwnerProfile(req: Request, res: Response, next: NextFunction) {
+  async updateOwnerProfile(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      const userEmail = req.user?.email;
       const { firstName, lastName, email, phone, streetAddress, bankName, accountNumber } = req.body;
       const inputName = [firstName, lastName].filter(Boolean).join(' ');
-      let owner = await prisma.owner.findFirst();
+
+      let owner = userEmail ? await prisma.owner.findFirst({ where: { email: userEmail } }) : null;
 
       if (!owner) {
-        owner = await prisma.owner.create({
-          data: {
-            name: inputName || 'William Anderson',
-            email: email || 'bill.a@investments.com',
-            phone: phone || '(212) 555-0122',
-            streetAddress: streetAddress || '742 Evergreen Terrace, New York, NY',
-          },
-        });
-      } else {
-        owner = await prisma.owner.update({
-          where: { id: owner.id },
-          data: {
-            name: inputName || owner.name,
-            email: email || owner.email,
-            phone: phone || owner.phone,
-            streetAddress: streetAddress || owner.streetAddress,
-          },
-        });
+        throw new Error('Owner profile not found for logged in user email.');
       }
+
+      owner = await prisma.owner.update({
+        where: { id: owner.id },
+        data: {
+          name: inputName || owner.name,
+          email: email || owner.email,
+          phone: phone || owner.phone,
+          streetAddress: streetAddress || owner.streetAddress,
+        },
+      });
 
       const [resFirstName = '', ...resLastNameParts] = (owner.name || '').split(' ');
       const resLastName = resLastNameParts.join(' ');
@@ -689,12 +685,12 @@ export class PortalController {
         res,
         data: {
           id: owner.id,
-          firstName: resFirstName || 'William',
-          lastName: resLastName || 'Anderson',
+          firstName: resFirstName || 'Owner',
+          lastName: resLastName || 'User',
           email: owner.email,
           phone: owner.phone,
           streetAddress: owner.streetAddress,
-          bankName: bankName || 'Chase checking',
+          bankName: bankName || 'Checking Account',
           accountNumber: accountNumber || 'XXXX-XXXX-9822',
           payoutStatus: 'Verified',
         },
@@ -704,16 +700,24 @@ export class PortalController {
     }
   }
 
-  async getOwnerReports(req: Request, res: Response, next: NextFunction) {
+  async getOwnerReports(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const properties = await prisma.property.findMany();
-      let revenue = 0;
-      for (const p of properties) {
-        revenue += p.currentValue ? Math.round(p.currentValue / 500) : 2400;
-      }
-      if (revenue === 0) revenue = 24500;
+      const properties = await this.getPropertiesForOwner(req);
+      const propertyIds = properties.map((p) => p.id);
 
-      const expenses = Math.round(revenue * 0.15);
+      if (propertyIds.length === 0) {
+        return sendSuccess({
+          res,
+          data: { revenue: 0, expenses: 0, occupancy: 0, distribution: 0 },
+        });
+      }
+
+      const payments = await prisma.rentPayment.findMany({
+        where: { propertyId: { in: propertyIds } },
+      });
+
+      const revenue = payments.reduce((sum, p) => sum + p.amount, 0);
+      const expenses = Math.round(revenue * 0.1);
       const distribution = revenue - expenses;
 
       return sendSuccess({
@@ -730,19 +734,38 @@ export class PortalController {
     }
   }
 
-  async getOwnerMetrics(req: Request, res: Response, next: NextFunction) {
+  async getOwnerMetrics(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const totalProperties = await prisma.property.count();
-      const properties = await prisma.property.findMany();
+      const properties = await this.getPropertiesForOwner(req);
+      const propertyIds = properties.map((p) => p.id);
 
-      let monthlyIncome = 0;
-      for (const p of properties) {
-        monthlyIncome += p.currentValue ? Math.round(p.currentValue / 500) : 2400;
+      if (propertyIds.length === 0) {
+        return sendSuccess({
+          res,
+          data: {
+            monthlyIncome: 0,
+            monthlyExpenses: 0,
+            netDistribution: 0,
+            netIncome: 0,
+            totalProperties: 0,
+            occupancyRate: 0,
+            totalUnits: 0,
+            activeLeases: 0,
+            pendingMaintenance: 0,
+          },
+        });
       }
-      if (monthlyIncome === 0) monthlyIncome = 24500;
 
-      const monthlyExpenses = Math.round(monthlyIncome * 0.15);
+      const payments = await prisma.rentPayment.findMany({
+        where: { propertyId: { in: propertyIds } },
+      });
+
+      const monthlyIncome = payments.reduce((sum, p) => sum + p.amount, 0);
+      const monthlyExpenses = Math.round(monthlyIncome * 0.1);
       const netDistribution = monthlyIncome - monthlyExpenses;
+
+      const totalProperties = properties.length;
+      const totalUnits = properties.reduce((sum, p) => sum + (p.unitsCount || p.units?.length || 1), 0);
 
       return sendSuccess({
         res,
@@ -752,10 +775,10 @@ export class PortalController {
           netDistribution,
           netIncome: netDistribution,
           totalProperties,
-          occupancyRate: 94.5,
-          totalUnits: totalProperties * 4,
-          activeLeases: totalProperties * 3,
-          pendingMaintenance: 2,
+          occupancyRate: 95.0,
+          totalUnits,
+          activeLeases: totalUnits,
+          pendingMaintenance: 0,
         },
       });
     } catch (error) {
@@ -1085,9 +1108,20 @@ export class PortalController {
   }
 
   // --- Invoices ---
-  async getInvoices(req: Request, res: Response, next: NextFunction) {
+  async getInvoices(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      let whereClause: any = {};
+      if (((req.user as any)?.role === 'Tenant' || req.user?.roleName === 'Tenant') && req.user?.email) {
+        const tenant = await prisma.tenant.findFirst({ where: { email: req.user.email } });
+        if (tenant) {
+          whereClause.tenantId = tenant.id;
+        } else {
+          return sendSuccess({ res, data: [] });
+        }
+      }
+
       const invoices = await prisma.invoice.findMany({
+        where: whereClause,
         include: { tenant: true },
         orderBy: { dueDate: 'asc' },
       });
@@ -1097,12 +1131,15 @@ export class PortalController {
     }
   }
 
-  async createTenantMessage(req: Request, res: Response, next: NextFunction) {
+  async createTenantMessage(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      const tenant = await this.getTenantForUser(req);
+      const tenantFullName = tenant ? `${tenant.firstName} ${tenant.lastName} (Resident)` : 'Resident';
       const { sender, recipient, subject, body } = req.body;
+
       const newMsg = await prisma.tenantMessage.create({
         data: {
-          sender: sender || 'Alex Mercer (Resident)',
+          sender: sender || tenantFullName,
           recipient: recipient || 'Property Manager Office',
           subject: subject || 'General Inquiry',
           body: body || '',
@@ -1172,9 +1209,20 @@ export class PortalController {
   }
 
   // --- Charges ---
-  async getCharges(req: Request, res: Response, next: NextFunction) {
+  async getCharges(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      let whereClause: any = {};
+      if (((req.user as any)?.role === 'Tenant' || req.user?.roleName === 'Tenant') && req.user?.email) {
+        const tenant = await prisma.tenant.findFirst({ where: { email: req.user.email } });
+        if (tenant) {
+          whereClause.tenantId = tenant.id;
+        } else {
+          return sendSuccess({ res, data: [] });
+        }
+      }
+
       const charges = await prisma.charge.findMany({
+        where: whereClause,
         include: { tenant: true },
         orderBy: { createdAt: 'desc' },
       });
@@ -1213,9 +1261,20 @@ export class PortalController {
   }
 
   // --- Deposits ---
-  async getDeposits(req: Request, res: Response, next: NextFunction) {
+  async getDeposits(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      let whereClause: any = {};
+      if (((req.user as any)?.role === 'Tenant' || req.user?.roleName === 'Tenant') && req.user?.email) {
+        const tenant = await prisma.tenant.findFirst({ where: { email: req.user.email } });
+        if (tenant) {
+          whereClause.tenantId = tenant.id;
+        } else {
+          return sendSuccess({ res, data: [] });
+        }
+      }
+
       const deposits = await prisma.deposit.findMany({
+        where: whereClause,
         include: { tenant: true },
         orderBy: { createdAt: 'desc' },
       });

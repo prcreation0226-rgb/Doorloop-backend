@@ -8,9 +8,21 @@ const database_1 = __importDefault(require("../config/database"));
 const appError_1 = require("../utils/appError");
 const cloudinary_1 = __importDefault(require("../config/cloudinary"));
 class PropertyService {
-    async getAllProperties(companyId) {
+    async getAllProperties(companyId, user) {
+        let whereClause = companyId ? { companyId } : {};
+        if (user?.role === 'Owner' && user?.email) {
+            const owner = await database_1.default.owner.findFirst({
+                where: { email: user.email },
+            });
+            if (owner) {
+                whereClause.ownerId = owner.id;
+            }
+            else {
+                return [];
+            }
+        }
         return database_1.default.property.findMany({
-            where: companyId ? { companyId } : {},
+            where: whereClause,
             include: {
                 owner: true,
                 buildings: true,

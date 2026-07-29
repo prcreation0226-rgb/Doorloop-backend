@@ -3,9 +3,22 @@ import { AppError } from '../utils/appError';
 import cloudinary from '../config/cloudinary';
 
 export class PropertyService {
-  async getAllProperties(companyId?: string) {
+  async getAllProperties(companyId?: string, user?: any) {
+    let whereClause: any = companyId ? { companyId } : {};
+
+    if (user?.role === 'Owner' && user?.email) {
+      const owner = await prisma.owner.findFirst({
+        where: { email: user.email },
+      });
+      if (owner) {
+        whereClause.ownerId = owner.id;
+      } else {
+        return [];
+      }
+    }
+
     return prisma.property.findMany({
-      where: companyId ? { companyId } : {},
+      where: whereClause,
       include: {
         owner: true,
         buildings: true,
