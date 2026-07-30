@@ -78,65 +78,65 @@ export class InspectionService {
     const prefix = template.type === 'MOVE_OUT' ? 'MO' : 'MI';
     const inspectionNumber = `${prefix}-${formattedCount}`;
 
-    return prisma.$transaction(async (tx) => {
-      // 1. Update MoveIn status
-      await tx.moveIn.update({
-        where: { id: data.moveInId },
-        data: { status: 'INSPECTION_IN_PROGRESS' },
-      });
+    return prisma.$transaction(
+      async (tx) => {
+        // 1. Update MoveIn status
+        await tx.moveIn.update({
+          where: { id: data.moveInId },
+          data: { status: 'INSPECTION_IN_PROGRESS' },
+        });
 
-      // 2. Create Inspection
-      const inspection = await tx.inspection.create({
-        data: {
-          inspectionNumber,
-          type: template.type === 'MOVE_OUT' ? 'MOVE_OUT' : 'MOVE_IN',
-          moveInId: data.moveInId,
-          templateId: data.templateId,
-          templateName: template.name,
-          templateVersion: 1, // Default snapshot version
-          status: 'DRAFT',
-          createdBy: data.createdBy || 'System',
-          companyId: data.companyId,
-          startedAt: new Date(),
-        },
-      });
-
-      // 3. Copy rooms & items into snapshots
-      for (const roomTemp of template.rooms) {
-        const room = await tx.inspectionRoom.create({
+        // 2. Create Inspection with nested rooms and items
+        const inspection = await tx.inspection.create({
           data: {
-            inspectionId: inspection.id,
-            name: roomTemp.name,
-            sortOrder: roomTemp.sortOrder,
+            inspectionNumber,
+            type: template.type === 'MOVE_OUT' ? 'MOVE_OUT' : 'MOVE_IN',
+            moveInId: data.moveInId,
+            templateId: data.templateId,
+            templateName: template.name,
+            templateVersion: 1, // Default snapshot version
+            status: 'DRAFT',
+            createdBy: data.createdBy || 'System',
+            companyId: data.companyId,
+            startedAt: new Date(),
+            rooms:
+              template.rooms && template.rooms.length > 0
+                ? {
+                    create: template.rooms.map((roomTemp: any) => ({
+                      name: roomTemp.name,
+                      sortOrder: roomTemp.sortOrder,
+                      items:
+                        roomTemp.items && roomTemp.items.length > 0
+                          ? {
+                              create: roomTemp.items.map((itemTemp: any) => ({
+                                label: itemTemp.label,
+                                required: itemTemp.required,
+                                sortOrder: itemTemp.sortOrder,
+                                completed: false,
+                              })),
+                            }
+                          : undefined,
+                    })),
+                  }
+                : undefined,
           },
         });
 
-        for (const itemTemp of roomTemp.items) {
-          await tx.inspectionItem.create({
-            data: {
-              roomId: room.id,
-              label: itemTemp.label,
-              required: itemTemp.required,
-              sortOrder: itemTemp.sortOrder,
-              completed: false,
-            },
-          });
-        }
-      }
+        await tx.auditLog.create({
+          data: {
+            action: `Inspection ${inspectionNumber} Started`,
+            userId: data.userId || null,
+            module: 'Leasing',
+            object: `Inspection ${inspection.id}`,
+            ip: '127.0.0.1',
+            status: 'Success',
+          },
+        });
 
-      await tx.auditLog.create({
-        data: {
-          action: `Inspection ${inspectionNumber} Started`,
-          userId: data.userId || null,
-          module: 'Leasing',
-          object: `Inspection ${inspection.id}`,
-          ip: '127.0.0.1',
-          status: 'Success',
-        },
-      });
-
-      return inspection;
-    });
+        return inspection;
+      },
+      { maxWait: 10000, timeout: 30000 }
+    );
   }
 
   async updateInspectionDraft(id: string, data: any, companyId?: string) {

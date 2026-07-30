@@ -165,7 +165,7 @@ model Property {
   type                PropertyType @default(Apartment)
   status              String       @default("Active")
   ownerId             String
-  owner               Owner        @relation(fields: [ownerId], references: [id])
+  owner               Owner        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   ownershipPercentage Float        @default(100)
   managementCompany   String       @default("Apex Property Management")
   address             String
@@ -424,7 +424,7 @@ model WorkOrder {
 model OwnerDistribution {
   id            String   @id @default(uuid())
   ownerId       String
-  owner         Owner    @relation(fields: [ownerId], references: [id])
+  owner         Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   period        String
   amount        Float
   status        String   @default("Completed")

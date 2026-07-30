@@ -47,33 +47,32 @@ class InspectionTemplateService {
                     active: data.active !== undefined ? data.active : true,
                     createdBy: data.createdBy || 'System',
                     companyId: data.companyId,
+                    rooms: data.rooms && Array.isArray(data.rooms) && data.rooms.length > 0
+                        ? {
+                            create: data.rooms.map((roomData, rIndex) => ({
+                                name: roomData.name,
+                                sortOrder: roomData.sortOrder !== undefined ? roomData.sortOrder : rIndex,
+                                items: roomData.items && Array.isArray(roomData.items) && roomData.items.length > 0
+                                    ? {
+                                        create: roomData.items.map((itemData, iIndex) => ({
+                                            label: itemData.label,
+                                            required: itemData.required !== undefined ? itemData.required : false,
+                                            sortOrder: itemData.sortOrder !== undefined ? itemData.sortOrder : iIndex,
+                                        })),
+                                    }
+                                    : undefined,
+                            })),
+                        }
+                        : undefined,
+                },
+                include: {
+                    rooms: {
+                        include: {
+                            items: true,
+                        },
+                    },
                 },
             });
-            if (data.rooms && Array.isArray(data.rooms)) {
-                for (let rIndex = 0; rIndex < data.rooms.length; rIndex++) {
-                    const roomData = data.rooms[rIndex];
-                    const room = await tx.inspectionTemplateRoom.create({
-                        data: {
-                            templateId: template.id,
-                            name: roomData.name,
-                            sortOrder: roomData.sortOrder !== undefined ? roomData.sortOrder : rIndex,
-                        },
-                    });
-                    if (roomData.items && Array.isArray(roomData.items)) {
-                        for (let iIndex = 0; iIndex < roomData.items.length; iIndex++) {
-                            const itemData = roomData.items[iIndex];
-                            await tx.inspectionTemplateItem.create({
-                                data: {
-                                    roomId: room.id,
-                                    label: itemData.label,
-                                    required: itemData.required !== undefined ? itemData.required : false,
-                                    sortOrder: itemData.sortOrder !== undefined ? itemData.sortOrder : iIndex,
-                                },
-                            });
-                        }
-                    }
-                }
-            }
             await tx.auditLog.create({
                 data: {
                     action: 'Inspection Template Created',
@@ -84,7 +83,7 @@ class InspectionTemplateService {
                 },
             });
             return template;
-        });
+        }, { maxWait: 10000, timeout: 30000 });
     }
     async updateTemplate(id, data, companyId) {
         const templateExists = await database_1.default.inspectionTemplate.findFirst({
@@ -93,6 +92,21 @@ class InspectionTemplateService {
         if (!templateExists)
             throw new Error('Template not found');
         return database_1.default.$transaction(async (tx) => {
+            if (data.rooms && Array.isArray(data.rooms)) {
+                const existingRooms = await tx.inspectionTemplateRoom.findMany({
+                    where: { templateId: id },
+                    select: { id: true },
+                });
+                const roomIds = existingRooms.map((r) => r.id);
+                if (roomIds.length > 0) {
+                    await tx.inspectionTemplateItem.deleteMany({
+                        where: { roomId: { in: roomIds } },
+                    });
+                }
+                await tx.inspectionTemplateRoom.deleteMany({
+                    where: { templateId: id },
+                });
+            }
             const template = await tx.inspectionTemplate.update({
                 where: { id },
                 data: {
@@ -100,47 +114,32 @@ class InspectionTemplateService {
                     type: data.type,
                     description: data.description,
                     active: data.active !== undefined ? data.active : undefined,
+                    rooms: data.rooms && Array.isArray(data.rooms) && data.rooms.length > 0
+                        ? {
+                            create: data.rooms.map((roomData, rIndex) => ({
+                                name: roomData.name,
+                                sortOrder: roomData.sortOrder !== undefined ? roomData.sortOrder : rIndex,
+                                items: roomData.items && Array.isArray(roomData.items) && roomData.items.length > 0
+                                    ? {
+                                        create: roomData.items.map((itemData, iIndex) => ({
+                                            label: itemData.label,
+                                            required: itemData.required !== undefined ? itemData.required : false,
+                                            sortOrder: itemData.sortOrder !== undefined ? itemData.sortOrder : iIndex,
+                                        })),
+                                    }
+                                    : undefined,
+                            })),
+                        }
+                        : undefined,
+                },
+                include: {
+                    rooms: {
+                        include: {
+                            items: true,
+                        },
+                    },
                 },
             });
-            // Simple sync logic: delete old rooms/items and recreate if rooms are passed in body
-            if (data.rooms && Array.isArray(data.rooms)) {
-                // Delete items belonging to rooms in this template
-                const existingRooms = await tx.inspectionTemplateRoom.findMany({
-                    where: { templateId: id },
-                    select: { id: true },
-                });
-                const roomIds = existingRooms.map((r) => r.id);
-                await tx.inspectionTemplateItem.deleteMany({
-                    where: { roomId: { in: roomIds } },
-                });
-                await tx.inspectionTemplateRoom.deleteMany({
-                    where: { templateId: id },
-                });
-                // Recreate
-                for (let rIndex = 0; rIndex < data.rooms.length; rIndex++) {
-                    const roomData = data.rooms[rIndex];
-                    const room = await tx.inspectionTemplateRoom.create({
-                        data: {
-                            templateId: template.id,
-                            name: roomData.name,
-                            sortOrder: roomData.sortOrder !== undefined ? roomData.sortOrder : rIndex,
-                        },
-                    });
-                    if (roomData.items && Array.isArray(roomData.items)) {
-                        for (let iIndex = 0; iIndex < roomData.items.length; iIndex++) {
-                            const itemData = roomData.items[iIndex];
-                            await tx.inspectionTemplateItem.create({
-                                data: {
-                                    roomId: room.id,
-                                    label: itemData.label,
-                                    required: itemData.required !== undefined ? itemData.required : false,
-                                    sortOrder: itemData.sortOrder !== undefined ? itemData.sortOrder : iIndex,
-                                },
-                            });
-                        }
-                    }
-                }
-            }
             await tx.auditLog.create({
                 data: {
                     action: 'Inspection Template Updated',
@@ -151,7 +150,7 @@ class InspectionTemplateService {
                 },
             });
             return template;
-        });
+        }, { maxWait: 10000, timeout: 30000 });
     }
     async duplicateTemplate(id, companyId) {
         const original = await database_1.default.inspectionTemplate.findFirst({
@@ -202,21 +201,22 @@ class InspectionTemplateService {
                     templateId: originalRoom.templateId,
                     name: `${originalRoom.name} (Copy)`,
                     sortOrder: originalRoom.sortOrder + 1,
+                    items: originalRoom.items && originalRoom.items.length > 0
+                        ? {
+                            create: originalRoom.items.map((item) => ({
+                                label: item.label,
+                                required: item.required,
+                                sortOrder: item.sortOrder,
+                            })),
+                        }
+                        : undefined,
+                },
+                include: {
+                    items: true,
                 },
             });
-            for (let i = 0; i < originalRoom.items.length; i++) {
-                const item = originalRoom.items[i];
-                await tx.inspectionTemplateItem.create({
-                    data: {
-                        roomId: room.id,
-                        label: item.label,
-                        required: item.required,
-                        sortOrder: item.sortOrder,
-                    },
-                });
-            }
             return room;
-        });
+        }, { maxWait: 10000, timeout: 30000 });
     }
 }
 exports.InspectionTemplateService = InspectionTemplateService;

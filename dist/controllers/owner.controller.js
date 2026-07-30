@@ -151,8 +151,35 @@ class OwnerController {
         try {
             const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
             const companyId = req.user?.companyId;
-            await database_js_1.default.owner.delete({
+            const ownerExists = await database_js_1.default.owner.findFirst({
                 where: companyId ? { id, companyId } : { id },
+            });
+            if (!ownerExists) {
+                return res.status(404).json({ success: false, error: 'Owner not found' });
+            }
+            await database_js_1.default.$transaction(async (tx) => {
+                // 1. Delete associated owner distributions
+                await tx.ownerDistribution.deleteMany({
+                    where: { ownerId: id },
+                });
+                // 2. Delete associated owner documents
+                await tx.ownerDocument.deleteMany({
+                    where: { ownerId: id },
+                });
+                // 3. Delete associated properties
+                const properties = await tx.property.findMany({
+                    where: { ownerId: id },
+                    select: { id: true },
+                });
+                for (const prop of properties) {
+                    await tx.property.delete({
+                        where: { id: prop.id },
+                    });
+                }
+                // 4. Delete the owner record
+                await tx.owner.delete({
+                    where: { id },
+                });
             });
             return (0, apiResponse_js_1.sendSuccess)({ res, message: 'Owner deleted successfully' });
         }
