@@ -7,7 +7,7 @@ export class PaymentController {
   async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const companyId = req.user?.companyId;
-      const payments = await paymentService.getAllPayments(companyId);
+      const payments = await paymentService.getAllPayments(companyId, req.user);
       return sendSuccess({ res, data: payments });
     } catch (error) {
       next(error);
@@ -17,7 +17,12 @@ export class PaymentController {
   async processPayment(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const companyId = req.user?.companyId;
-      const payment = await paymentService.processPayment({ ...req.body, companyId });
+      const payment = await paymentService.processPayment({
+        ...req.body,
+        companyId,
+        userEmail: req.user?.email,
+        userRole: req.user?.roleName || (req.user as any)?.role,
+      });
       return sendSuccess({ res, statusCode: 201, data: payment });
     } catch (error) {
       next(error);

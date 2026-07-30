@@ -75,8 +75,15 @@ class SuperAdminService {
         });
     }
     async getCompanyUsers(companyId) {
+        const whereClause = {};
+        if (companyId) {
+            whereClause.companyId = companyId;
+            whereClause.role = {
+                in: ['Maintenance Staff', 'Collection Manager', 'Maintenance'],
+            };
+        }
         const companyUsers = await database_1.default.companyUser.findMany({
-            where: companyId ? { companyId } : {},
+            where: whereClause,
             include: { company: true },
             orderBy: { createdAt: 'desc' },
         });

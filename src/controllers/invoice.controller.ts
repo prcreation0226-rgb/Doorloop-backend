@@ -7,8 +7,24 @@ class InvoiceController {
   async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const companyId = req.user?.companyId;
+      const userRole = req.user?.roleName || (req.user as any)?.role;
+      const userEmail = req.user?.email;
+
+      let whereClause: any = companyId ? { companyId } : {};
+
+      if (userRole === 'Tenant' && userEmail) {
+        const tenant = await prisma.tenant.findFirst({
+          where: { email: userEmail },
+        });
+        if (tenant) {
+          whereClause = { tenantId: tenant.id };
+        } else {
+          return sendSuccess({ res, data: [] });
+        }
+      }
+
       let invoices = await prisma.invoice.findMany({
-        where: companyId ? { companyId } : {},
+        where: whereClause,
         orderBy: { createdAt: 'desc' },
       });
 

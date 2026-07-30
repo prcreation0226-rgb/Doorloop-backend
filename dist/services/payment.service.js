@@ -6,9 +6,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.paymentService = exports.PaymentService = void 0;
 const database_1 = __importDefault(require("../config/database"));
 class PaymentService {
-    async getAllPayments(companyId) {
+    async getAllPayments(companyId, user) {
+        let whereClause = companyId ? { companyId } : {};
+        const userRole = user?.roleName || user?.role;
+        if (userRole === 'Tenant' && user?.email) {
+            const tenant = await database_1.default.tenant.findFirst({
+                where: { email: user.email },
+            });
+            if (tenant) {
+                whereClause = { tenantId: tenant.id };
+            }
+            else {
+                return [];
+            }
+        }
         return database_1.default.rentPayment.findMany({
-            where: companyId ? { companyId } : {},
+            where: whereClause,
             include: {
                 tenant: true,
                 property: true,
@@ -23,8 +36,19 @@ class PaymentService {
         let unitId = data.unitId;
         let leaseId = data.leaseId;
         // 1. Verify tenant exists or find first tenant
-        let tenant = tenantId ? await database_1.default.tenant.findUnique({ where: { id: tenantId } }) : null;
-        if (!tenant && tenantId) {
+        let tenant = null;
+        if (data.userRole === 'Tenant' && data.userEmail) {
+            tenant = await database_1.default.tenant.findFirst({
+                where: { email: data.userEmail },
+            });
+        }
+        if (tenant) {
+            tenantId = tenant.id;
+        }
+        else if (tenantId) {
+            tenant = await database_1.default.tenant.findUnique({ where: { id: tenantId } });
+        }
+        if (!tenant && !tenantId) {
             tenant = await database_1.default.tenant.findFirst({ where: data.companyId ? { companyId: data.companyId } : {} });
         }
         if (tenant) {
@@ -125,6 +149,39 @@ class PaymentService {
                     companyId: data.companyId || tenant?.companyId || property?.companyId,
                 },
             });
+            // Update tenant unpaid invoices
+            const unpaidInvoices = await tx.invoice.findMany({
+                where: { tenantId, status: { in: ['Sent', 'Overdue', 'Partially Paid'] } },
+                orderBy: { dueDate: 'asc' },
+            });
+            let remainingAmount = Number(data.amount);
+            for (const invoice of unpaidInvoices) {
+                if (remainingAmount <= 0)
+                    break;
+                const currentBalance = invoice.balance || 0;
+                if (remainingAmount >= currentBalance) {
+                    await tx.invoice.update({
+                        where: { id: invoice.id },
+                        data: {
+                            paidAmount: { increment: currentBalance },
+                            balance: 0,
+                            status: 'Paid',
+                        },
+                    });
+                    remainingAmount -= currentBalance;
+                }
+                else {
+                    await tx.invoice.update({
+                        where: { id: invoice.id },
+                        data: {
+                            paidAmount: { increment: remainingAmount },
+                            balance: { decrement: remainingAmount },
+                            status: 'Partially Paid',
+                        },
+                    });
+                    remainingAmount = 0;
+                }
+            }
             // Update Checking Account (Asset)
             const checkingAccount = await tx.coAAccount.findFirst({
                 where: data.companyId

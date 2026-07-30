@@ -7,7 +7,7 @@ class PaymentController {
     async getAll(req, res, next) {
         try {
             const companyId = req.user?.companyId;
-            const payments = await payment_service_1.paymentService.getAllPayments(companyId);
+            const payments = await payment_service_1.paymentService.getAllPayments(companyId, req.user);
             return (0, apiResponse_1.sendSuccess)({ res, data: payments });
         }
         catch (error) {
@@ -17,7 +17,12 @@ class PaymentController {
     async processPayment(req, res, next) {
         try {
             const companyId = req.user?.companyId;
-            const payment = await payment_service_1.paymentService.processPayment({ ...req.body, companyId });
+            const payment = await payment_service_1.paymentService.processPayment({
+                ...req.body,
+                companyId,
+                userEmail: req.user?.email,
+                userRole: req.user?.roleName || req.user?.role,
+            });
             return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: payment });
         }
         catch (error) {

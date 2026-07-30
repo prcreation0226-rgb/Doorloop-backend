@@ -10,8 +10,22 @@ class InvoiceController {
     async getAll(req, res, next) {
         try {
             const companyId = req.user?.companyId;
+            const userRole = req.user?.roleName || req.user?.role;
+            const userEmail = req.user?.email;
+            let whereClause = companyId ? { companyId } : {};
+            if (userRole === 'Tenant' && userEmail) {
+                const tenant = await database_1.default.tenant.findFirst({
+                    where: { email: userEmail },
+                });
+                if (tenant) {
+                    whereClause = { tenantId: tenant.id };
+                }
+                else {
+                    return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+                }
+            }
             let invoices = await database_1.default.invoice.findMany({
-                where: companyId ? { companyId } : {},
+                where: whereClause,
                 orderBy: { createdAt: 'desc' },
             });
             // Seed sample invoices if DB is empty for this company

@@ -1,9 +1,22 @@
 import prisma from '../config/database';
 
 export class PaymentService {
-  async getAllPayments(companyId?: string) {
+  async getAllPayments(companyId?: string, user?: any) {
+    let whereClause: any = companyId ? { companyId } : {};
+    const userRole = user?.roleName || user?.role;
+    if (userRole === 'Tenant' && user?.email) {
+      const tenant = await prisma.tenant.findFirst({
+        where: { email: user.email },
+      });
+      if (tenant) {
+        whereClause = { tenantId: tenant.id };
+      } else {
+        return [];
+      }
+    }
+
     return prisma.rentPayment.findMany({
-      where: companyId ? { companyId } : {},
+      where: whereClause,
       include: {
         tenant: true,
         property: true,
@@ -20,10 +33,23 @@ export class PaymentService {
     let leaseId = data.leaseId;
 
     // 1. Verify tenant exists or find first tenant
-    let tenant = tenantId ? await prisma.tenant.findUnique({ where: { id: tenantId } }) : null;
-    if (!tenant && tenantId) {
+    let tenant = null;
+    if (data.userRole === 'Tenant' && data.userEmail) {
+      tenant = await prisma.tenant.findFirst({
+        where: { email: data.userEmail },
+      });
+    }
+
+    if (tenant) {
+      tenantId = tenant.id;
+    } else if (tenantId) {
+      tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    }
+
+    if (!tenant && !tenantId) {
       tenant = await prisma.tenant.findFirst({ where: data.companyId ? { companyId: data.companyId } : {} });
     }
+
     if (tenant) {
       tenantId = tenant.id;
       if (!unitId && tenant.unitId) {
@@ -126,6 +152,39 @@ export class PaymentService {
           companyId: data.companyId || tenant?.companyId || property?.companyId,
         },
       });
+
+      // Update tenant unpaid invoices
+      const unpaidInvoices = await tx.invoice.findMany({
+        where: { tenantId, status: { in: ['Sent', 'Overdue', 'Partially Paid'] } },
+        orderBy: { dueDate: 'asc' },
+      });
+
+      let remainingAmount = Number(data.amount);
+      for (const invoice of unpaidInvoices) {
+        if (remainingAmount <= 0) break;
+        const currentBalance = invoice.balance || 0;
+        if (remainingAmount >= currentBalance) {
+          await tx.invoice.update({
+            where: { id: invoice.id },
+            data: {
+              paidAmount: { increment: currentBalance },
+              balance: 0,
+              status: 'Paid',
+            },
+          });
+          remainingAmount -= currentBalance;
+        } else {
+          await tx.invoice.update({
+            where: { id: invoice.id },
+            data: {
+              paidAmount: { increment: remainingAmount },
+              balance: { decrement: remainingAmount },
+              status: 'Partially Paid',
+            },
+          });
+          remainingAmount = 0;
+        }
+      }
 
       // Update Checking Account (Asset)
       const checkingAccount = await tx.coAAccount.findFirst({
