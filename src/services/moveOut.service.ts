@@ -269,9 +269,9 @@ export class MoveOutService {
     if (!moveOut) throw new Error('Move Out record not found');
     if (moveOut.status === 'COMPLETED') throw new Error('Move Out is already completed');
 
-    // Validate that Lease is Active
-    if (moveOut.lease.status !== 'Active') {
-      throw new Error(`Lease status must be 'Active' to complete Move Out. Current: ${moveOut.lease.status}`);
+    // Validate that Lease is Active or Terminated
+    if (moveOut.lease.status !== 'Active' && moveOut.lease.status !== 'Terminated') {
+      throw new Error(`Lease status must be 'Active' or 'Terminated' to complete Move Out. Current: ${moveOut.lease.status}`);
     }
 
     // Validate that at least one inspection is completed
@@ -298,11 +298,11 @@ export class MoveOutService {
         },
       });
 
-      // 3. Update Unit status to Vacant_Needs_Preparation (not Available)
+      // 3. Update Unit status to Vacant
       await tx.unit.update({
         where: { id: moveOut.unitId },
         data: {
-          status: 'Vacant_Needs_Preparation',
+          status: 'Vacant',
         },
       });
 

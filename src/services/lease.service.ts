@@ -57,18 +57,40 @@ export class LeaseService {
   }
 
   async updateLease(id: string, data: any, companyId?: string) {
-    if (companyId) {
-      const lease = await prisma.lease.findFirst({
-        where: { id, companyId },
+    const lease = await prisma.lease.findFirst({
+      where: { id, ...(companyId ? { companyId } : {}) },
+    });
+    if (!lease) throw new Error('Lease not found.');
+
+    return prisma.$transaction(async (tx) => {
+      const updatedLease = await tx.lease.update({
+        where: { id },
+        data: {
+          status: data.status,
+          endDate: data.endDate ? new Date(data.endDate) : undefined,
+        },
       });
-      if (!lease) throw new Error('Lease not found.');
-    }
-    return prisma.lease.update({
-      where: { id },
-      data: {
-        status: data.status,
-        endDate: data.endDate ? new Date(data.endDate) : undefined,
-      },
+
+      if (data.status === 'Terminated') {
+        const existingMoveOut = await tx.moveOut.findFirst({
+          where: { leaseId: id },
+        });
+        if (!existingMoveOut) {
+          await tx.moveOut.create({
+            data: {
+              leaseId: id,
+              unitId: lease.unitId,
+              scheduledDate: new Date(),
+              status: 'SCHEDULED',
+              notes: 'Automatically scheduled via lease termination',
+              createdBy: 'System',
+              companyId: lease.companyId,
+            },
+          });
+        }
+      }
+
+      return updatedLease;
     });
   }
 
