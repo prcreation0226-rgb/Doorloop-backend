@@ -231,7 +231,6 @@ export class ReportRepository {
         include: {
           property: true,
           vendor: true,
-          staff: true,
         },
         orderBy,
         skip,
@@ -322,31 +321,24 @@ export class ReportRepository {
   }
 
   // Exports Tracking
-  async createExport(data: {
-    companyId: string;
-    userId: string;
-    reportType: string;
-    filters: string;
-    fileName: string;
-    fileType: string;
-    status: 'Pending' | 'Processing' | 'Completed' | 'Failed';
-    errorMessage?: string;
-  }) {
-    return prisma.reportExport.create({
-      data,
-    });
+  async createExport(data: any) {
+    return (prisma as any).reportExport.create({ data });
+  }
+
+  async saveExport(data: any) {
+    return (prisma as any).reportExport.create({ data });
   }
 
   async getExports(companyId: string, userId: string, page: number, limit: number) {
     const skip = (page - 1) * limit;
     const [exports, totalRecords] = await Promise.all([
-      prisma.reportExport.findMany({
+      (prisma as any).reportExport.findMany({
         where: { companyId, userId },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      prisma.reportExport.count({ where: { companyId, userId } }),
+      (prisma as any).reportExport.count({ where: { companyId, userId } }),
     ]);
 
     return { exports, totalRecords };
@@ -358,7 +350,7 @@ export class ReportRepository {
     fileUrl?: string,
     errorMessage?: string
   ) {
-    return prisma.reportExport.update({
+    return (prisma as any).reportExport.update({
       where: { id },
       data: {
         status,

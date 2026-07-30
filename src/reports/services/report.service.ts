@@ -250,19 +250,19 @@ export class ReportService {
       sortOrder: query.sortOrder,
     });
 
-    const data = result.workOrders.map((w) => ({
+    const data = result.workOrders.map((w: any) => ({
       ticketId: w.id.substring(0, 8).toUpperCase(),
       propertyName: w.property?.name || 'N/A',
       unitNumber: 'Common Area', // Fallback as WorkOrder links directly to property
       issue: w.title,
       priority: w.priority,
       status: w.status,
-      assignedPerson: w.staff?.name || 'Unassigned',
+      assignedPerson: w.vendor?.contactName || 'Unassigned',
       vendor: w.vendor?.companyName || 'Unassigned',
       estimatedCost: w.estimatedCost || 0,
       actualCost: w.actualCost || 0,
       createdDate: w.createdAt,
-      completedDate: (w as any).completedAt || null,
+      completedDate: w.completedAt || null,
     }));
 
     return {

@@ -69,10 +69,7 @@ async function autoHealMissingCompanyIds() {
             where: { companyId: null },
             data: { companyId: defaultCompanyId },
         });
-        await database_js_1.default.companyUser.updateMany({
-            where: { companyId: null },
-            data: { companyId: defaultCompanyId },
-        });
+        // CompanyUser model has non-nullable companyId
         console.log(`[AutoHeal] Successfully assigned default manager companyId (${defaultCompanyId}) to all existing null records.`);
     }
     catch (error) {

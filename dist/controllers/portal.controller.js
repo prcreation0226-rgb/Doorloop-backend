@@ -195,22 +195,19 @@ class PortalController {
             if (!tenant) {
                 return (0, apiResponse_1.sendSuccess)({ res, data: [] });
             }
-            const orders = await database_1.default.workOrder.findMany({
+            const requests = await database_1.default.serviceRequest.findMany({
                 where: { tenantId: tenant.id },
-                include: {
-                    property: true,
-                },
                 orderBy: { createdAt: 'desc' },
             });
-            const formatted = orders.map((wo) => ({
-                id: wo.id,
-                title: wo.title,
-                propertyName: wo.property?.name || 'Property',
+            const formatted = requests.map((sr) => ({
+                id: sr.id,
+                title: sr.title,
+                propertyName: sr.propertyName || 'Property',
                 unitName: tenant.unit ? `Unit ${tenant.unit.unitNumber}` : 'Unit',
-                priority: wo.priority || 'Medium',
-                status: wo.status || 'Submitted',
-                date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-                description: wo.description || '',
+                priority: sr.priority || 'Medium',
+                status: sr.status || 'Submitted',
+                date: sr.createdAt ? new Date(sr.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                description: sr.description || '',
                 preferredTime: 'Morning (8AM - 12PM)',
             }));
             return (0, apiResponse_1.sendSuccess)({ res, data: formatted });
@@ -226,43 +223,36 @@ class PortalController {
             const propertyId = tenant?.unit?.propertyId || (await database_1.default.property.findFirst())?.id;
             if (!propertyId)
                 throw new Error('No property available for maintenance request.');
-            let mappedPriority = 'Normal';
-            if (priority === 'Low')
-                mappedPriority = 'Low';
-            else if (priority === 'High' || priority === 'Urgent')
-                mappedPriority = 'High';
-            else if (priority === 'Emergency')
-                mappedPriority = 'Emergency';
-            else
-                mappedPriority = 'Normal';
+            const propertyRec = await database_1.default.property.findUnique({ where: { id: propertyId } });
             const tenantName = tenant ? `${tenant.firstName} ${tenant.lastName}` : 'Tenant';
-            const newOrder = await database_1.default.workOrder.create({
+            const newRequest = await database_1.default.serviceRequest.create({
                 data: {
                     title: title || 'General Repair Request',
-                    description: `${description || ''} (Requested by: ${tenantName})`,
-                    priority: mappedPriority,
-                    status: 'Submitted',
+                    description: description || '',
+                    priority: priority || 'Normal',
+                    status: 'New',
+                    category: 'General',
                     propertyId: propertyId,
-                    buildingId: tenant?.unit?.buildingId || null,
-                    unitId: tenant?.unitId || null,
+                    propertyName: propertyRec?.name || 'Property',
+                    unitNumber: tenant?.unit ? tenant.unit.unitNumber : '',
                     tenantId: tenant?.id || null,
+                    tenantName: tenantName,
                     companyId: tenant?.companyId || null,
-                    estimatedCost: 150,
+                    messages: '[]',
                 },
-                include: { property: true },
             });
             return (0, apiResponse_1.sendSuccess)({
                 res,
                 statusCode: 201,
                 data: {
-                    id: newOrder.id,
-                    title: newOrder.title,
-                    propertyName: newOrder.property?.name || 'Property',
+                    id: newRequest.id,
+                    title: newRequest.title,
+                    propertyName: newRequest.propertyName,
                     unitName: tenant?.unit ? `Unit ${tenant.unit.unitNumber}` : 'Unit',
-                    priority: newOrder.priority,
-                    status: newOrder.status,
-                    date: new Date(newOrder.createdAt).toISOString().split('T')[0],
-                    description: newOrder.description,
+                    priority: newRequest.priority,
+                    status: newRequest.status,
+                    date: new Date(newRequest.createdAt).toISOString().split('T')[0],
+                    description: newRequest.description,
                     preferredTime: preferredTime || 'Morning (8AM - 12PM)',
                 },
             });
@@ -1345,88 +1335,89 @@ class PortalController {
         try {
             const companyId = req.user?.companyId;
             const userEmail = req.user?.email;
-            if (!userEmail) {
-                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            let staff = null;
+            let vendor = null;
+            if (userEmail) {
+                staff = await database_1.default.staffProfile.findFirst({ where: { email: userEmail } });
+                vendor = await database_1.default.vendor.findFirst({ where: { email: userEmail } });
             }
-            const staff = await database_1.default.staffProfile.findFirst({
-                where: { email: userEmail },
-            });
-            if (!staff) {
-                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
-            }
-            let orders = await database_1.default.workOrder.findMany({
-                where: { staffId: staff.id },
-                include: { property: true },
+            // 1. Fetch ServiceRequests
+            const serviceRequests = await database_1.default.serviceRequest.findMany({
+                where: companyId ? { OR: [{ companyId }, { companyId: null }] } : {},
                 orderBy: { createdAt: 'desc' },
             });
-            const firstProperty = await database_1.default.property.findFirst({
-                where: companyId ? { companyId } : {},
+            // 2. Fetch WorkOrders
+            let workOrders = await database_1.default.workOrder.findMany({
+                where: companyId ? { OR: [{ companyId }, { companyId: null }] } : {},
+                include: { property: true, vendor: true },
+                orderBy: { createdAt: 'desc' },
             });
-            let propertyId = firstProperty?.id;
-            if (!propertyId) {
-                const owner = await database_1.default.owner.findFirst({
-                    where: companyId ? { companyId } : {},
+            // Seed default work orders if both lists are empty
+            if (serviceRequests.length === 0 && workOrders.length === 0) {
+                const property = await database_1.default.property.findFirst({
+                    where: companyId ? { OR: [{ companyId }, { companyId: null }] } : {},
                 });
-                const newProp = await database_1.default.property.create({
-                    data: {
-                        name: 'Oakridge Heights',
-                        address: '100 Main St, Austin, TX 78701',
-                        streetAddress: '100 Main St',
-                        city: 'Austin',
-                        state: 'TX',
-                        zip: '78701',
-                        yearBuilt: 2018,
-                        squareFootage: 12000,
-                        purchasePrice: 1500000,
-                        currentValue: 1800000,
-                        ownerId: owner?.id || 'default-owner',
-                        companyId,
-                    },
-                });
-                propertyId = newProp.id;
+                if (property) {
+                    await database_1.default.workOrder.createMany({
+                        data: [
+                            {
+                                title: 'HVAC Air Conditioner Filter Replacement',
+                                description: 'AC unit blowing warm air, filter replacement required.',
+                                priority: 'High',
+                                status: 'Assigned',
+                                propertyId: property.id,
+                                companyId,
+                                estimatedCost: 180,
+                            },
+                            {
+                                title: 'Plumbing Sink Leak Repair',
+                                description: 'Kitchen sink pipe leaking continuously.',
+                                priority: 'Normal',
+                                status: 'InProgress',
+                                propertyId: property.id,
+                                companyId,
+                                estimatedCost: 120,
+                            },
+                            {
+                                title: 'Electrical Panel Inspection & Outlet Repair',
+                                description: 'Master bedroom outlet sparking.',
+                                priority: 'Emergency',
+                                status: 'Assigned',
+                                propertyId: property.id,
+                                companyId,
+                                estimatedCost: 250,
+                            },
+                        ],
+                    });
+                    workOrders = await database_1.default.workOrder.findMany({
+                        where: companyId ? { OR: [{ companyId }, { companyId: null }] } : {},
+                        include: { property: true, vendor: true },
+                        orderBy: { createdAt: 'desc' },
+                    });
+                }
             }
-            if (orders.length === 0) {
-                await database_1.default.workOrder.createMany({
-                    data: [
-                        {
-                            title: 'HVAC Air Conditioner Filter Replacement',
-                            description: 'AC unit blowing warm air, filter replacement required.',
-                            priority: 'High',
-                            status: 'Assigned',
-                            propertyId: propertyId,
-                            staffId: staff.id,
-                            companyId,
-                            estimatedCost: 180,
-                        },
-                        {
-                            title: 'Plumbing Sink Leak Repair',
-                            description: 'Kitchen sink pipe leaking continuously.',
-                            priority: 'Normal',
-                            status: 'InProgress',
-                            propertyId: propertyId,
-                            staffId: staff.id,
-                            companyId,
-                            estimatedCost: 120,
-                        },
-                        {
-                            title: 'Electrical Panel Inspection & Outlet Repair',
-                            description: 'Master bedroom outlet sparking.',
-                            priority: 'Emergency',
-                            status: 'Assigned',
-                            propertyId: propertyId,
-                            staffId: staff.id,
-                            companyId,
-                            estimatedCost: 250,
-                        },
-                    ],
-                });
-                orders = await database_1.default.workOrder.findMany({
-                    where: { staffId: staff.id },
-                    include: { property: true },
-                    orderBy: { createdAt: 'desc' },
-                });
-            }
-            const formatted = orders.map((wo, index) => ({
+            const formattedServiceRequests = serviceRequests.map((sr) => ({
+                id: sr.id,
+                workOrderNumber: `SR-${sr.id.slice(0, 8)}`,
+                propertyName: sr.propertyName || 'Oakridge Heights',
+                unitNumber: sr.unitNumber ? (sr.unitNumber.toLowerCase().includes('unit') ? sr.unitNumber : `Unit ${sr.unitNumber}`) : 'Unit 102',
+                issue: sr.title,
+                category: sr.category || (sr.title.toLowerCase().includes('hvac') ? 'HVAC' : sr.title.toLowerCase().includes('plumbing') ? 'Plumbing' : 'General'),
+                priority: sr.priority === 'Normal' ? 'Medium' : sr.priority || 'Medium',
+                status: sr.status === 'Open' || sr.status === 'New' || sr.status === 'Submitted' ? 'New' : sr.status === 'InProgress' || sr.status === 'In Progress' ? 'In Progress' : sr.status === 'Completed' ? 'Completed' : sr.status === 'Closed' ? 'Closed' : sr.status === 'Rejected' ? 'Rejected' : sr.status === 'Assigned' ? 'Assigned' : sr.status || 'New',
+                assignedTechnician: sr.assignedVendorName || sr.assignedTechnician || (vendor ? (vendor.contactName || vendor.companyName) : 'Maintenance Staff'),
+                dueDate: sr.scheduledDate || new Date().toISOString().split('T')[0],
+                createdAt: sr.createdAt ? new Date(sr.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                description: sr.description || '',
+                estimatedCost: sr.estimatedCost || sr.cost || 0,
+                actualCost: sr.cost || 0,
+                labourCost: 0,
+                materialsCost: 0,
+                extraExpenses: 0,
+                rejectReason: sr.notes || null,
+                resolutionNotes: null,
+            }));
+            const formattedWorkOrders = workOrders.map((wo, index) => ({
                 id: wo.id,
                 workOrderNumber: `WO-${1001 + index}`,
                 propertyName: wo.property?.name || 'Oakridge Heights',
@@ -1434,20 +1425,21 @@ class PortalController {
                 issue: wo.title,
                 category: wo.title.toLowerCase().includes('hvac') ? 'HVAC' : wo.title.toLowerCase().includes('plumbing') ? 'Plumbing' : 'Electrical',
                 priority: wo.priority === 'Normal' ? 'Medium' : wo.priority || 'Medium',
-                status: wo.status === 'Open' ? 'New' : wo.status === 'InProgress' ? 'In Progress' : wo.status === 'Completed' ? 'Completed' : wo.status === 'Closed' ? 'Closed' : wo.status === 'Rejected' ? 'Rejected' : wo.status === 'Assigned' ? 'Assigned' : wo.status || 'New',
-                assignedTechnician: staff.name || 'Technician Lead 1',
-                dueDate: '2026-07-30',
-                createdAt: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : '2026-07-25',
+                status: wo.status === 'Open' || wo.status === 'Submitted' ? 'New' : wo.status === 'InProgress' ? 'In Progress' : wo.status === 'Completed' ? 'Completed' : wo.status === 'Closed' ? 'Closed' : wo.status === 'Rejected' ? 'Rejected' : wo.status === 'Assigned' ? 'Assigned' : wo.status || 'New',
+                assignedTechnician: wo.staff?.name || wo.vendor?.contactName || wo.vendor?.companyName || 'Maintenance Staff',
+                dueDate: new Date().toISOString().split('T')[0],
+                createdAt: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 description: wo.description || '',
                 estimatedCost: wo.estimatedCost || 150,
                 actualCost: wo.actualCost || 0,
-                rejectReason: wo.rejectReason || null,
-                resolutionNotes: wo.resolutionNotes || null,
                 labourCost: wo.labourCost || 0,
                 materialsCost: wo.materialsCost || 0,
                 extraExpenses: wo.extraExpenses || 0,
+                rejectReason: wo.rejectReason || null,
+                resolutionNotes: wo.resolutionNotes || null,
             }));
-            return (0, apiResponse_1.sendSuccess)({ res, data: formatted });
+            const combined = [...formattedServiceRequests, ...formattedWorkOrders];
+            return (0, apiResponse_1.sendSuccess)({ res, data: combined });
         }
         catch (error) {
             next(error);
@@ -1457,21 +1449,6 @@ class PortalController {
         try {
             const id = req.params.id;
             const { status, actualCost, rejectReason, resolutionNotes, labourCost, materialsCost, extraExpenses } = req.body;
-            const userEmail = req.user?.email;
-            const staff = await database_1.default.staffProfile.findFirst({
-                where: { email: userEmail },
-            });
-            if (!staff) {
-                throw new Error('Unauthorized: Staff profile not found.');
-            }
-            // Check task assignment
-            const checkOrder = await database_1.default.workOrder.findFirst({
-                where: { id, staffId: staff.id },
-            });
-            if (!checkOrder) {
-                throw new Error('Unauthorized or task not found.');
-            }
-            // Map frontend status string → Prisma WorkOrderStatus enum value
             const statusMap = {
                 'Open': 'Open',
                 'New': 'Submitted',
@@ -1481,6 +1458,7 @@ class PortalController {
                 'Accepted': 'Accepted',
                 'InProgress': 'InProgress',
                 'In Progress': 'InProgress',
+                'In_Progress': 'InProgress',
                 'Completed': 'Completed',
                 'Rejected': 'Rejected',
                 'Cancelled': 'Cancelled',
@@ -1488,27 +1466,45 @@ class PortalController {
                 'Returned': 'Returned',
             };
             const mappedStatus = status ? (statusMap[status] ?? status) : undefined;
-            // Automatically compute actualCost if components are provided
-            const finalLabour = labourCost !== undefined && labourCost !== null ? parseFloat(String(labourCost)) : checkOrder.labourCost || 0;
-            const finalMaterials = materialsCost !== undefined && materialsCost !== null ? parseFloat(String(materialsCost)) : checkOrder.materialsCost || 0;
-            const finalExtra = extraExpenses !== undefined && extraExpenses !== null ? parseFloat(String(extraExpenses)) : checkOrder.extraExpenses || 0;
-            const computedActualCost = (labourCost !== undefined || materialsCost !== undefined || extraExpenses !== undefined)
+            const finalLabour = labourCost !== undefined && labourCost !== null ? parseFloat(String(labourCost)) : 0;
+            const finalMaterials = materialsCost !== undefined && materialsCost !== null ? parseFloat(String(materialsCost)) : 0;
+            const finalExtra = extraExpenses !== undefined && extraExpenses !== null ? parseFloat(String(extraExpenses)) : 0;
+            const computedCost = (labourCost !== undefined || materialsCost !== undefined || extraExpenses !== undefined)
                 ? (finalLabour + finalMaterials + finalExtra)
                 : (actualCost !== undefined && actualCost !== null ? parseFloat(String(actualCost)) : undefined);
-            const order = await database_1.default.workOrder.update({
-                where: { id },
-                data: {
-                    ...(mappedStatus && { status: mappedStatus }),
-                    ...(computedActualCost !== undefined && { actualCost: computedActualCost }),
-                    ...(labourCost !== undefined && labourCost !== null && { labourCost: parseFloat(String(labourCost)) }),
-                    ...(materialsCost !== undefined && materialsCost !== null && { materialsCost: parseFloat(String(materialsCost)) }),
-                    ...(extraExpenses !== undefined && extraExpenses !== null && { extraExpenses: parseFloat(String(extraExpenses)) }),
-                    ...(rejectReason && { rejectReason }),
-                    ...(resolutionNotes && { resolutionNotes }),
-                    ...(mappedStatus === 'Completed' && { completedAt: new Date() }),
-                },
-            });
-            return (0, apiResponse_1.sendSuccess)({ res, data: order });
+            // First check ServiceRequest table
+            const existingSr = await database_1.default.serviceRequest.findUnique({ where: { id } });
+            if (existingSr) {
+                const srStatus = mappedStatus === 'InProgress' ? 'In Progress' : mappedStatus;
+                const updatedSr = await database_1.default.serviceRequest.update({
+                    where: { id },
+                    data: {
+                        ...(srStatus && { status: srStatus }),
+                        ...(computedCost !== undefined && { cost: computedCost }),
+                        ...(rejectReason && { notes: rejectReason }),
+                    },
+                });
+                return (0, apiResponse_1.sendSuccess)({ res, data: updatedSr });
+            }
+            // Check WorkOrder table
+            const existingWo = await database_1.default.workOrder.findUnique({ where: { id } });
+            if (existingWo) {
+                const order = await database_1.default.workOrder.update({
+                    where: { id },
+                    data: {
+                        ...(mappedStatus && { status: mappedStatus }),
+                        ...(computedCost !== undefined && { actualCost: computedCost }),
+                        ...(labourCost !== undefined && labourCost !== null && { labourCost: parseFloat(String(labourCost)) }),
+                        ...(materialsCost !== undefined && materialsCost !== null && { materialsCost: parseFloat(String(materialsCost)) }),
+                        ...(extraExpenses !== undefined && extraExpenses !== null && { extraExpenses: parseFloat(String(extraExpenses)) }),
+                        ...(rejectReason && { rejectReason }),
+                        ...(resolutionNotes && { resolutionNotes }),
+                        ...(mappedStatus === 'Completed' && { completedAt: new Date() }),
+                    },
+                });
+                return (0, apiResponse_1.sendSuccess)({ res, data: order });
+            }
+            return res.status(404).json({ success: false, error: { message: 'Task not found' } });
         }
         catch (error) {
             next(error);

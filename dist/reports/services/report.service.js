@@ -231,7 +231,7 @@ class ReportService {
             issue: w.title,
             priority: w.priority,
             status: w.status,
-            assignedPerson: w.staff?.name || 'Unassigned',
+            assignedPerson: w.vendor?.contactName || 'Unassigned',
             vendor: w.vendor?.companyName || 'Unassigned',
             estimatedCost: w.estimatedCost || 0,
             actualCost: w.actualCost || 0,

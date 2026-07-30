@@ -1433,7 +1433,7 @@ export class PortalController {
       // 2. Fetch WorkOrders
       let workOrders = await prisma.workOrder.findMany({
         where: companyId ? { OR: [{ companyId }, { companyId: null }] } : {},
-        include: { property: true, vendor: true, staff: true },
+        include: { property: true, vendor: true },
         orderBy: { createdAt: 'desc' },
       });
 
@@ -1478,7 +1478,7 @@ export class PortalController {
 
           workOrders = await prisma.workOrder.findMany({
             where: companyId ? { OR: [{ companyId }, { companyId: null }] } : {},
-            include: { property: true, vendor: true, staff: true },
+            include: { property: true, vendor: true },
             orderBy: { createdAt: 'desc' },
           });
         }

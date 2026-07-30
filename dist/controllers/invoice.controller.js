@@ -49,7 +49,7 @@ class InvoiceController {
                         propertyId,
                         propertyName,
                         unitNumber: '101',
-                        dueDate: new Date('2026-08-01T00:00:00.000Z'),
+                        dueDate: '2026-08-01',
                         amount: 1800,
                         paidAmount: 1800,
                         balance: 0,
@@ -67,7 +67,7 @@ class InvoiceController {
                         propertyId,
                         propertyName,
                         unitNumber: '102',
-                        dueDate: new Date('2026-08-01T00:00:00.000Z'),
+                        dueDate: '2026-08-01',
                         amount: 2200,
                         paidAmount: 0,
                         balance: 2200,
@@ -85,7 +85,7 @@ class InvoiceController {
                         propertyId,
                         propertyName,
                         unitNumber: '203',
-                        dueDate: new Date('2026-07-15T00:00:00.000Z'),
+                        dueDate: '2026-07-15',
                         amount: 1500,
                         paidAmount: 750,
                         balance: 750,
@@ -103,7 +103,7 @@ class InvoiceController {
                         propertyId,
                         propertyName,
                         unitNumber: '305',
-                        dueDate: new Date('2026-07-01T00:00:00.000Z'),
+                        dueDate: '2026-07-01',
                         amount: 1950,
                         paidAmount: 0,
                         balance: 1950,
@@ -115,34 +115,16 @@ class InvoiceController {
                         notes: 'Tenant contacted 3 times. No response.',
                         companyId,
                     },
-                    {
-                        tenantId,
-                        tenantName,
-                        propertyId,
-                        propertyName,
-                        unitNumber: '401',
-                        dueDate: new Date('2026-09-01T00:00:00.000Z'),
-                        amount: 2400,
-                        paidAmount: 0,
-                        balance: 2400,
-                        status: 'Draft',
-                        lineItems: JSON.stringify([
-                            { description: 'Monthly Rent – September 2026', amount: 2200 },
-                            { description: 'Water & Sewage Utility', amount: 200 },
-                        ]),
-                        notes: null,
-                        companyId,
-                    },
                 ];
                 await database_1.default.invoice.createMany({ data: seeds });
                 invoices = await database_1.default.invoice.findMany({
-                    where: companyId ? { companyId } : {},
+                    where: whereClause,
                     orderBy: { createdAt: 'desc' },
                 });
             }
             const formatted = invoices.map((inv) => ({
                 ...inv,
-                dueDate: inv.dueDate ? new Date(inv.dueDate).toISOString().split('T')[0] : '',
+                dueDate: inv.dueDate || '',
                 lineItems: (() => {
                     try {
                         return JSON.parse(inv.lineItems);
@@ -170,7 +152,7 @@ class InvoiceController {
                     propertyId: propertyId || 'default',
                     propertyName: propertyName || 'Unknown Property',
                     unitNumber: unitNumber || '',
-                    dueDate: isNaN(parsedDueDate.getTime()) ? new Date() : parsedDueDate,
+                    dueDate: typeof dueDate === 'string' ? dueDate : (isNaN(parsedDueDate.getTime()) ? new Date().toISOString().split('T')[0] : parsedDueDate.toISOString().split('T')[0]),
                     amount: parseFloat(amount) || 0,
                     paidAmount: parseFloat(paidAmount) || 0,
                     balance: parseFloat(balance ?? amount) || 0,

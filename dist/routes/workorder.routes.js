@@ -4,6 +4,7 @@ const express_1 = require("express");
 const workorder_controller_js_1 = require("../controllers/workorder.controller.js");
 const router = (0, express_1.Router)();
 router.get('/', (req, res, next) => workorder_controller_js_1.workOrderController.getAll(req, res, next));
+router.get('/:id', (req, res, next) => workorder_controller_js_1.workOrderController.getById(req, res, next));
 router.post('/', (req, res, next) => workorder_controller_js_1.workOrderController.create(req, res, next));
 router.put('/:id', (req, res, next) => workorder_controller_js_1.workOrderController.update(req, res, next));
 router.delete('/:id', (req, res, next) => workorder_controller_js_1.workOrderController.remove(req, res, next));

@@ -169,7 +169,6 @@ class ReportRepository {
                 include: {
                     property: true,
                     vendor: true,
-                    staff: true,
                 },
                 orderBy,
                 skip,
@@ -225,9 +224,10 @@ class ReportRepository {
     }
     // Exports Tracking
     async createExport(data) {
-        return database_1.default.reportExport.create({
-            data,
-        });
+        return database_1.default.reportExport.create({ data });
+    }
+    async saveExport(data) {
+        return database_1.default.reportExport.create({ data });
     }
     async getExports(companyId, userId, page, limit) {
         const skip = (page - 1) * limit;
