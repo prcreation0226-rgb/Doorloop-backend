@@ -204,14 +204,8 @@ export class PortalController {
         return sendSuccess({ res, data: [] });
       }
 
-      const tenantName = `${tenant.firstName} ${tenant.lastName}`;
       const orders = await prisma.workOrder.findMany({
-        where: tenant.unitId ? {
-          OR: [
-            { propertyId: tenant.unit?.propertyId },
-            { description: { contains: tenantName } }
-          ]
-        } : { description: { contains: tenantName } },
+        where: { tenantId: tenant.id },
         include: {
           property: true,
         },
@@ -224,7 +218,7 @@ export class PortalController {
         propertyName: wo.property?.name || 'Property',
         unitName: tenant.unit ? `Unit ${tenant.unit.unitNumber}` : 'Unit',
         priority: wo.priority || 'Medium',
-        status: wo.status || 'Open',
+        status: wo.status || 'Submitted',
         date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         description: wo.description || '',
         preferredTime: 'Morning (8AM - 12PM)',
@@ -257,8 +251,12 @@ export class PortalController {
           title: title || 'General Repair Request',
           description: `${description || ''} (Requested by: ${tenantName})`,
           priority: mappedPriority,
-          status: 'Open',
+          status: 'Submitted',
           propertyId: propertyId,
+          buildingId: tenant?.unit?.buildingId || null,
+          unitId: tenant?.unitId || null,
+          tenantId: tenant?.id || null,
+          companyId: tenant?.companyId || null,
           estimatedCost: 150,
         },
         include: { property: true },
@@ -1424,16 +1422,36 @@ export class PortalController {
   async getStaffTasks(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const companyId = req.user?.companyId;
+<<<<<<< HEAD
 
       // 1. Fetch ServiceRequests
       const serviceRequests = await prisma.serviceRequest.findMany({
         where: companyId ? { companyId } : {},
+=======
+      const userEmail = req.user?.email;
+      if (!userEmail) {
+        return sendSuccess({ res, data: [] });
+      }
+
+      const staff = await prisma.staffProfile.findFirst({
+        where: { email: userEmail },
+      });
+
+      if (!staff) {
+        return sendSuccess({ res, data: [] });
+      }
+
+      let orders = await prisma.workOrder.findMany({
+        where: { staffId: staff.id },
+        include: { property: true },
+>>>>>>> ffd80f3e5e8a84072ca2f6226b71baa1d58ce396
         orderBy: { createdAt: 'desc' },
       });
 
       // 2. Fetch WorkOrders
       const orders = await prisma.workOrder.findMany({
         where: companyId ? { companyId } : {},
+<<<<<<< HEAD
         include: { property: true, vendor: true },
         orderBy: { createdAt: 'desc' },
       });
@@ -1458,6 +1476,78 @@ export class PortalController {
       }));
 
       const formattedWorkOrders = orders.map((wo: any, index: number) => ({
+=======
+      });
+      let propertyId = firstProperty?.id;
+
+      if (!propertyId) {
+        const owner = await prisma.owner.findFirst({
+          where: companyId ? { companyId } : {},
+        });
+        const newProp = await prisma.property.create({
+          data: {
+            name: 'Oakridge Heights',
+            address: '100 Main St, Austin, TX 78701',
+            streetAddress: '100 Main St',
+            city: 'Austin',
+            state: 'TX',
+            zip: '78701',
+            yearBuilt: 2018,
+            squareFootage: 12000,
+            purchasePrice: 1500000,
+            currentValue: 1800000,
+            ownerId: owner?.id || 'default-owner',
+            companyId,
+          },
+        });
+        propertyId = newProp.id;
+      }
+
+      if (orders.length === 0) {
+        await prisma.workOrder.createMany({
+          data: [
+            {
+              title: 'HVAC Air Conditioner Filter Replacement',
+              description: 'AC unit blowing warm air, filter replacement required.',
+              priority: 'High',
+              status: 'Assigned',
+              propertyId: propertyId,
+              staffId: staff.id,
+              companyId,
+              estimatedCost: 180,
+            },
+            {
+              title: 'Plumbing Sink Leak Repair',
+              description: 'Kitchen sink pipe leaking continuously.',
+              priority: 'Normal',
+              status: 'InProgress',
+              propertyId: propertyId,
+              staffId: staff.id,
+              companyId,
+              estimatedCost: 120,
+            },
+            {
+              title: 'Electrical Panel Inspection & Outlet Repair',
+              description: 'Master bedroom outlet sparking.',
+              priority: 'Emergency',
+              status: 'Assigned',
+              propertyId: propertyId,
+              staffId: staff.id,
+              companyId,
+              estimatedCost: 250,
+            },
+          ],
+        });
+
+        orders = await prisma.workOrder.findMany({
+          where: { staffId: staff.id },
+          include: { property: true },
+          orderBy: { createdAt: 'desc' },
+        });
+      }
+
+      const formatted = orders.map((wo: any, index: number) => ({
+>>>>>>> ffd80f3e5e8a84072ca2f6226b71baa1d58ce396
         id: wo.id,
         workOrderNumber: `WO-${1001 + index}`,
         propertyName: wo.property?.name || 'Oakridge Heights',
@@ -1466,14 +1556,23 @@ export class PortalController {
         category: wo.title.toLowerCase().includes('hvac') ? 'HVAC' : wo.title.toLowerCase().includes('plumbing') ? 'Plumbing' : 'Electrical',
         priority: wo.priority === 'Normal' ? 'Medium' : wo.priority || 'Medium',
         status: wo.status === 'Open' ? 'New' : wo.status === 'InProgress' ? 'In Progress' : wo.status === 'Completed' ? 'Completed' : wo.status === 'Closed' ? 'Closed' : wo.status === 'Rejected' ? 'Rejected' : wo.status === 'Assigned' ? 'Assigned' : wo.status || 'New',
+<<<<<<< HEAD
         assignedTechnician: wo.vendor?.contactName || wo.vendor?.companyName || 'Maintenance Staff',
         dueDate: new Date().toISOString().split('T')[0],
         createdAt: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+=======
+        assignedTechnician: staff.name || 'Technician Lead 1',
+        dueDate: '2026-07-30',
+        createdAt: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : '2026-07-25',
+>>>>>>> ffd80f3e5e8a84072ca2f6226b71baa1d58ce396
         description: wo.description || '',
         estimatedCost: wo.estimatedCost || 150,
         actualCost: wo.actualCost || 0,
         rejectReason: wo.rejectReason || null,
         resolutionNotes: wo.resolutionNotes || null,
+        labourCost: wo.labourCost || 0,
+        materialsCost: wo.materialsCost || 0,
+        extraExpenses: wo.extraExpenses || 0,
       }));
 
       const combined = [...formattedServiceRequests, ...formattedWorkOrders];
@@ -1483,28 +1582,48 @@ export class PortalController {
     }
   }
 
-  async updateStaffTaskStatus(req: Request, res: Response, next: NextFunction) {
+  async updateStaffTaskStatus(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const { status, actualCost, rejectReason, resolutionNotes } = req.body;
+      const { status, actualCost, rejectReason, resolutionNotes, labourCost, materialsCost, extraExpenses } = req.body;
+      const userEmail = req.user?.email;
+
+      const staff = await prisma.staffProfile.findFirst({
+        where: { email: userEmail },
+      });
+
+      if (!staff) {
+        throw new Error('Unauthorized: Staff profile not found.');
+      }
+
+      // Check task assignment
+      const checkOrder = await prisma.workOrder.findFirst({
+        where: { id, staffId: staff.id },
+      });
+
+      if (!checkOrder) {
+        throw new Error('Unauthorized or task not found.');
+      }
 
       const statusMap: Record<string, string> = {
         'Open': 'Open',
-        'New': 'Open',
+        'New': 'Submitted',
+        'Submitted': 'Submitted',
+        'Approved': 'Approved',
         'Assigned': 'Assigned',
-        'Scheduled': 'Assigned',
-        'Draft': 'Open',
-        'In Progress': 'InProgress',
-        'In_Progress': 'InProgress',
+        'Accepted': 'Accepted',
         'InProgress': 'InProgress',
+        'In Progress': 'InProgress',
         'Completed': 'Completed',
         'Rejected': 'Rejected',
         'Cancelled': 'Cancelled',
         'Closed': 'Closed',
+        'Returned': 'Returned',
       };
 
       const mappedStatus = status ? (statusMap[status] ?? status) : undefined;
 
+<<<<<<< HEAD
       // First try updating ServiceRequest if ID matches
       const existingSr = await prisma.serviceRequest.findUnique({ where: { id } });
       if (existingSr) {
@@ -1521,13 +1640,28 @@ export class PortalController {
       }
 
       // Otherwise update WorkOrder
+=======
+      // Automatically compute actualCost if components are provided
+      const finalLabour = labourCost !== undefined && labourCost !== null ? parseFloat(String(labourCost)) : checkOrder.labourCost || 0;
+      const finalMaterials = materialsCost !== undefined && materialsCost !== null ? parseFloat(String(materialsCost)) : checkOrder.materialsCost || 0;
+      const finalExtra = extraExpenses !== undefined && extraExpenses !== null ? parseFloat(String(extraExpenses)) : checkOrder.extraExpenses || 0;
+      
+      const computedActualCost = (labourCost !== undefined || materialsCost !== undefined || extraExpenses !== undefined)
+        ? (finalLabour + finalMaterials + finalExtra)
+        : (actualCost !== undefined && actualCost !== null ? parseFloat(String(actualCost)) : undefined);
+
+>>>>>>> ffd80f3e5e8a84072ca2f6226b71baa1d58ce396
       const order = await prisma.workOrder.update({
         where: { id },
         data: {
           ...(mappedStatus && { status: mappedStatus as any }),
-          ...(actualCost !== undefined && actualCost !== null && { actualCost: parseFloat(String(actualCost)) }),
+          ...(computedActualCost !== undefined && { actualCost: computedActualCost }),
+          ...(labourCost !== undefined && labourCost !== null && { labourCost: parseFloat(String(labourCost)) }),
+          ...(materialsCost !== undefined && materialsCost !== null && { materialsCost: parseFloat(String(materialsCost)) }),
+          ...(extraExpenses !== undefined && extraExpenses !== null && { extraExpenses: parseFloat(String(extraExpenses)) }),
           ...(rejectReason && { rejectReason }),
           ...(resolutionNotes && { resolutionNotes }),
+          ...(mappedStatus === 'Completed' && { completedAt: new Date() }),
         },
       });
 
