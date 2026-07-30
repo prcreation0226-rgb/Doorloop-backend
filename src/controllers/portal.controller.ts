@@ -382,15 +382,22 @@ export class PortalController {
   async getOwnerDistributions(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const userEmail = req.user?.email;
-      if (!userEmail) return sendSuccess({ res, data: [] });
+      const companyId = req.user?.companyId;
 
-      const owner = await prisma.owner.findFirst({ where: { email: userEmail } });
-      if (!owner) {
-        return sendSuccess({ res, data: [] });
+      let owner: any = null;
+      if (userEmail) {
+        owner = await prisma.owner.findFirst({ where: { email: userEmail } });
+      }
+
+      const whereFilter: any = {};
+      if (owner) {
+        whereFilter.ownerId = owner.id;
+      } else if (companyId) {
+        whereFilter.companyId = companyId;
       }
 
       const distributions = await prisma.ownerDistribution.findMany({
-        where: { ownerId: owner.id },
+        where: Object.keys(whereFilter).length > 0 ? whereFilter : (companyId ? { companyId } : {}),
         orderBy: { processedDate: 'desc' },
       });
 
@@ -1628,6 +1635,19 @@ export class PortalController {
       const parsedAmount = parseFloat(amount || '0');
       const companyId = (req as AuthenticatedRequest).user?.companyId;
 
+      let parsedDesc: any = {};
+      try {
+        parsedDesc = JSON.parse(description || '{}');
+      } catch (e) {
+        parsedDesc = {};
+      }
+
+      const payeeType = parsedDesc.payeeType || req.body.payeeType || 'Vendor';
+      const payeeId = parsedDesc.payeeId || req.body.payeeId || '';
+      const propertyId = parsedDesc.propertyId || req.body.propertyId || null;
+      const propertyName = parsedDesc.propertyName || req.body.propertyName || 'Property';
+      const unitId = parsedDesc.unitId || req.body.unitId || null;
+
       const expense = await prisma.$transaction(async (tx) => {
         const exp = await tx.expense.create({
           data: {
@@ -1662,6 +1682,70 @@ export class PortalController {
             where: { id: checkingAccount.id },
             data: { balance: { decrement: parsedAmount } }
           });
+        }
+
+        // 3. Multi-Tenant SaaS Auto-Sync:
+        // If Payee Type is 'Owner' (Property Owner Distribution)
+        if (payeeType === 'Owner' || payeeType === 'Property Owner (Distribution)' || category?.toLowerCase().includes('distribution')) {
+          let ownerIdToUse = payeeId;
+          if (!ownerIdToUse && propertyId) {
+            const prop = await tx.property.findUnique({ where: { id: propertyId } });
+            if (prop && (prop as any).ownerId) {
+              ownerIdToUse = (prop as any).ownerId;
+            }
+          }
+          if (!ownerIdToUse) {
+            const firstOwner = await tx.owner.findFirst({
+              where: companyId ? { companyId } : {},
+            });
+            if (firstOwner) ownerIdToUse = firstOwner.id;
+          }
+
+          if (ownerIdToUse) {
+            await tx.ownerDistribution.create({
+              data: {
+                ownerId: ownerIdToUse,
+                amount: parsedAmount,
+                status: 'Completed',
+                processedDate: new Date(date || Date.now()),
+                period: propertyName ? `${propertyName} Distribution` : 'Property Distribution',
+              },
+            });
+          }
+        }
+
+        // If Payee Type is 'Tenant' (Refund / Return)
+        if (payeeType === 'Tenant' || payeeType === 'Tenant (Refund / Return)' || category?.toLowerCase().includes('refund')) {
+          let tenantIdToUse = payeeId;
+          let tenantObj: any = null;
+          if (tenantIdToUse) {
+            tenantObj = await tx.tenant.findUnique({ where: { id: tenantIdToUse }, include: { leases: true } });
+          } else {
+            tenantObj = await tx.tenant.findFirst({
+              where: companyId ? { companyId } : {},
+              include: { leases: true },
+            });
+            if (tenantObj) tenantIdToUse = tenantObj.id;
+          }
+
+          if (tenantObj && tenantIdToUse) {
+            const lease = tenantObj.leases?.[0];
+            await tx.rentPayment.create({
+              data: {
+                tenantId: tenantIdToUse,
+                propertyId: tenantObj.propertyId || propertyId || 'default-property',
+                unitId: tenantObj.unitId || unitId || 'default-unit',
+                leaseId: lease?.id || 'default-lease',
+                amount: parsedAmount,
+                dueDate: new Date(date || Date.now()),
+                paidDate: new Date(date || Date.now()),
+                paymentMethod: 'ACH',
+                status: 'Paid',
+                referenceNumber: `REFUND-${Date.now()}`,
+                companyId: companyId || tenantObj.companyId || null,
+              },
+            });
+          }
         }
 
         return exp;
