@@ -35,7 +35,7 @@ class InvoiceController {
             propertyId,
             propertyName,
             unitNumber: '101',
-            dueDate: '2026-08-01',
+            dueDate: new Date('2026-08-01T00:00:00.000Z'),
             amount: 1800,
             paidAmount: 1800,
             balance: 0,
@@ -53,7 +53,7 @@ class InvoiceController {
             propertyId,
             propertyName,
             unitNumber: '102',
-            dueDate: '2026-08-01',
+            dueDate: new Date('2026-08-01T00:00:00.000Z'),
             amount: 2200,
             paidAmount: 0,
             balance: 2200,
@@ -71,7 +71,7 @@ class InvoiceController {
             propertyId,
             propertyName,
             unitNumber: '203',
-            dueDate: '2026-07-15',
+            dueDate: new Date('2026-07-15T00:00:00.000Z'),
             amount: 1500,
             paidAmount: 750,
             balance: 750,
@@ -89,7 +89,7 @@ class InvoiceController {
             propertyId,
             propertyName,
             unitNumber: '305',
-            dueDate: '2026-07-01',
+            dueDate: new Date('2026-07-01T00:00:00.000Z'),
             amount: 1950,
             paidAmount: 0,
             balance: 1950,
@@ -107,7 +107,7 @@ class InvoiceController {
             propertyId,
             propertyName,
             unitNumber: '401',
-            dueDate: '2026-09-01',
+            dueDate: new Date('2026-09-01T00:00:00.000Z'),
             amount: 2400,
             paidAmount: 0,
             balance: 2400,
@@ -130,6 +130,7 @@ class InvoiceController {
 
       const formatted = invoices.map((inv: any) => ({
         ...inv,
+        dueDate: inv.dueDate ? new Date(inv.dueDate).toISOString().split('T')[0] : '',
         lineItems: (() => {
           try { return JSON.parse(inv.lineItems as string); } catch { return []; }
         })(),
@@ -150,6 +151,8 @@ class InvoiceController {
       } = req.body;
       const companyId = req.user?.companyId;
 
+      const parsedDueDate = dueDate ? new Date(dueDate) : new Date();
+
       const invoice = await prisma.invoice.create({
         data: {
           tenantId: tenantId || 'default',
@@ -157,7 +160,7 @@ class InvoiceController {
           propertyId: propertyId || 'default',
           propertyName: propertyName || 'Unknown Property',
           unitNumber: unitNumber || '',
-          dueDate: dueDate || new Date().toISOString().split('T')[0],
+          dueDate: isNaN(parsedDueDate.getTime()) ? new Date() : parsedDueDate,
           amount: parseFloat(amount) || 0,
           paidAmount: parseFloat(paidAmount) || 0,
           balance: parseFloat(balance ?? amount) || 0,

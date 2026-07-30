@@ -17,7 +17,6 @@ class ReportController {
             await database_1.default.auditLog.create({
                 data: {
                     userId: user.id,
-                    companyId: user.companyId || null,
                     action,
                     module: 'Reports',
                     object: reportName,
