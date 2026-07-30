@@ -191,11 +191,12 @@ model Property {
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id])
 
-  buildings    Building[]
-  units        Unit[]
-  leases       Lease[]
-  rentPayments RentPayment[]
-  workOrders   WorkOrder[]
+  buildings         Building[]
+  units             Unit[]
+  leases            Lease[]
+  rentPayments      RentPayment[]
+  workOrders        WorkOrder[]
+  journalEntryLines JournalEntryLine[]
 
   @@map("properties")
 }
@@ -210,8 +211,12 @@ model Building {
   occupancyRate Float    @default(0)
 
   units Unit[]
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("buildings")
+  @@index([companyId])
+  @@index([propertyId])
 }
 
 model Unit {
@@ -236,8 +241,11 @@ model Unit {
   violations   Violation[]
   moveIns      MoveIn[]
   moveOuts     MoveOut[]
+  companyId    String?
+  company      Company?   @relation(fields: [companyId], references: [id])
 
   @@map("units")
+  @@index([companyId, propertyId])
 }
 
 model Tenant {
@@ -265,6 +273,7 @@ model Tenant {
   imageUrl          String?      @db.Text
 
   @@map("tenants")
+  @@index([companyId])
 }
 
 model Lease {
@@ -289,6 +298,7 @@ model Lease {
   moveOut  MoveOut?
 
   @@map("leases")
+  @@index([companyId, propertyId, status])
 }
 
 // --- Billing & Accounting Models ---
@@ -314,6 +324,7 @@ model RentPayment {
   company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("rent_payments")
+  @@index([companyId, propertyId, dueDate, status])
 }
 
 model CoAAccount {
@@ -331,6 +342,7 @@ model CoAAccount {
   journalLines JournalEntryLine[]
 
   @@map("coa_accounts")
+  @@index([companyId])
 }
 
 model JournalEntry {
@@ -345,6 +357,7 @@ model JournalEntry {
   company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("journal_entries")
+  @@index([companyId])
 }
 
 model JournalEntryLine {
@@ -355,8 +368,11 @@ model JournalEntryLine {
   account        CoAAccount   @relation(fields: [accountId], references: [id])
   debit          Float        @default(0)
   credit         Float        @default(0)
+  propertyId     String?
+  property       Property?    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 
   @@map("journal_entry_lines")
+  @@index([propertyId])
 }
 
 // --- Maintenance & Operations Models ---
@@ -375,6 +391,7 @@ model Vendor {
   workOrders WorkOrder[]
 
   @@map("vendors")
+  @@index([companyId])
 }
 
 model WorkOrder {
@@ -395,11 +412,13 @@ model WorkOrder {
   rejectReason    String?         @db.Text
   resolutionNotes String?         @db.Text
   createdAt       DateTime        @default(now())
+  completedAt     DateTime?       // Tracking completion timestamp
 
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("work_orders")
+  @@index([companyId, propertyId, status, createdAt])
 }
 
 model OwnerDistribution {
@@ -424,8 +443,11 @@ model AuditLog {
   object    String
   ip        String
   status    String   @default("Success")
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("audit_logs")
+  @@index([companyId])
 }
 
 model Announcement {
@@ -647,7 +669,7 @@ model Invoice {
   propertyId   String
   propertyName String
   unitNumber   String   @default("")
-  dueDate      String
+  dueDate      DateTime // Corrected to DateTime
   amount       Float
   paidAmount   Float    @default(0)
   balance      Float
@@ -661,6 +683,7 @@ model Invoice {
   company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("invoices")
+  @@index([companyId, propertyId, dueDate])
 }
 
 model ServiceRequest {
@@ -734,6 +757,14 @@ model Company {
   moveOuts            MoveOut[]
   inspectionTemplates InspectionTemplate[]
   inspections         Inspection[]
+  units               Unit[]
+  buildings           Building[]
+  charges             Charge[]
+  deposits            Deposit[]
+  expenses            Expense[]
+  incomes             Income[]
+  reportExports       ReportExport[]
+  auditLogs           AuditLog[]
 
   @@map("companies")
 }
@@ -881,8 +912,11 @@ model Charge {
   amount    Float
   status    String   @default("Active")
   createdAt DateTime @default(now())
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("charges")
+  @@index([companyId])
 }
 
 model Deposit {
@@ -892,8 +926,11 @@ model Deposit {
   amount    Float
   status    String   @default("Held")
   createdAt DateTime @default(now())
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@map("deposits")
+  @@index([companyId])
 }
 
 model Expense {
@@ -903,8 +940,11 @@ model Expense {
   date        DateTime @default(now())
   description String   @db.Text
   createdAt   DateTime @default(now())
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id])
 
   @@map("expenses")
+  @@index([companyId])
 }
 
 model MaintenanceRequest {
@@ -1182,8 +1222,11 @@ model Income {
   description String   @db.Text
   status      String   @default("Cleared")
   createdAt   DateTime @default(now())
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id])
 
   @@map("incomes")
+  @@index([companyId])
 }
 
 model Signature {
@@ -1198,4 +1241,32 @@ model Signature {
   createdAt      DateTime @default(now())
 
   @@map("signatures")
+}
+
+enum ExportStatus {
+  Pending
+  Processing
+  Completed
+  Failed
+}
+
+model ReportExport {
+  id           String       @id @default(uuid())
+  companyId    String
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId       String
+  reportType   String       // e.g. "RENT_ROLL", "PROFIT_LOSS"
+  filters      String       @db.Text // JSON string representing applied filters
+  fileName     String
+  fileUrl      String?      @db.Text
+  fileType     String       // "PDF", "XLSX", "CSV"
+  status       ExportStatus @default(Pending)
+  errorMessage String?      @db.Text // Tracks failure reason for background processing
+  createdAt    DateTime     @default(now())
+  completedAt  DateTime?
+
+  @@map("report_exports")
+  @@index([companyId])
+  @@index([userId])
+  @@index([companyId, createdAt])
 }
