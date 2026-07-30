@@ -77,10 +77,7 @@ export async function autoHealMissingCompanyIds() {
       data: { companyId: defaultCompanyId },
     });
 
-    await prisma.companyUser.updateMany({
-      where: { companyId: null as any },
-      data: { companyId: defaultCompanyId },
-    });
+    // CompanyUser model has non-nullable companyId
 
     console.log(`[AutoHeal] Successfully assigned default manager companyId (${defaultCompanyId}) to all existing null records.`);
   } catch (error) {
