@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.moveInService = exports.MoveInService = void 0;
 const database_1 = __importDefault(require("../config/database"));
+const auditHelper_1 = require("../utils/auditHelper");
 class MoveInService {
     async getAllMoveIns(companyId, status) {
         return database_1.default.moveIn.findMany({
@@ -98,10 +99,11 @@ class MoveInService {
             where: { id },
             data: updateData,
         });
+        const validUserId = await (0, auditHelper_1.getValidUserId)(data.userId);
         await database_1.default.auditLog.create({
             data: {
                 action: `Move In Updated: Status ${updatedMoveIn.status}`,
-                userId: data.userId || null,
+                userId: validUserId,
                 module: 'Leasing',
                 object: `MoveIn ${id}`,
                 ip: '127.0.0.1',
@@ -166,11 +168,12 @@ class MoveInService {
                     status: 'Active',
                 },
             });
+            const validUserId = await (0, auditHelper_1.getValidUserId)(userId, tx);
             // 5. Create Audit Log
             await tx.auditLog.create({
                 data: {
                     action: 'Move In Completed & Lease Activated',
-                    userId: userId || null,
+                    userId: validUserId,
                     module: 'Leasing',
                     object: `MoveIn ${id}`,
                     ip: '127.0.0.1',

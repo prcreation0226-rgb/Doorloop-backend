@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { MoveOutStatus, LeaseStatus, UnitStatus, TenantStatus, DamageDecision } from '@prisma/client';
+import { getValidUserId } from '../utils/auditHelper';
 
 export class MoveOutService {
   async getAllMoveOuts(companyId?: string, status?: string) {
@@ -107,10 +108,11 @@ export class MoveOutService {
       data: updateData,
     });
 
+    const validUserId = await getValidUserId(data.userId);
     await prisma.auditLog.create({
       data: {
         action: `Move Out Updated: Status ${updatedMoveOut.status}`,
-        userId: data.userId || null,
+        userId: validUserId,
         module: 'Leasing',
         object: `MoveOut ${id}`,
         ip: '127.0.0.1',
@@ -312,11 +314,12 @@ export class MoveOutService {
         },
       });
 
+      const validUserId = await getValidUserId(userId, tx);
       // 5. Create Audit Log
       await tx.auditLog.create({
         data: {
           action: 'Move Out Completed & Lease Ended',
-          userId: userId || null,
+          userId: validUserId,
           module: 'Leasing',
           object: `MoveOut ${id}`,
           ip: '127.0.0.1',
