@@ -138,9 +138,9 @@ export class PropertyService {
     });
   }
 
-  async updateProperty(id: string, data: any, file?: any) {
-    const prop = await prisma.property.findUnique({
-      where: { id },
+  async updateProperty(id: string, data: any, file?: any, companyId?: string) {
+    const prop = await prisma.property.findFirst({
+      where: companyId ? { id, companyId } : { id },
     });
     if (!prop) throw new AppError('Property not found.', 404, 'NOT_FOUND');
 

@@ -50,8 +50,9 @@ class PropertyController {
     async update(req, res, next) {
         try {
             const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+            const companyId = req.user?.companyId;
             const file = req.file;
-            const updated = await property_service_1.propertyService.updateProperty(id, req.body, file);
+            const updated = await property_service_1.propertyService.updateProperty(id, req.body, file, companyId);
             return (0, apiResponse_1.sendSuccess)({ res, data: updated });
         }
         catch (error) {

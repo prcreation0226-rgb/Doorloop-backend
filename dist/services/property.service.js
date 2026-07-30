@@ -136,9 +136,9 @@ class PropertyService {
             where: { id },
         });
     }
-    async updateProperty(id, data, file) {
-        const prop = await database_1.default.property.findUnique({
-            where: { id },
+    async updateProperty(id, data, file, companyId) {
+        const prop = await database_1.default.property.findFirst({
+            where: companyId ? { id, companyId } : { id },
         });
         if (!prop)
             throw new appError_1.AppError('Property not found.', 404, 'NOT_FOUND');

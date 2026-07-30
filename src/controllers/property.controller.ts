@@ -50,8 +50,9 @@ export class PropertyController {
   async update(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const companyId = req.user?.companyId;
       const file = req.file;
-      const updated = await propertyService.updateProperty(id, req.body, file);
+      const updated = await propertyService.updateProperty(id, req.body, file, companyId);
       return sendSuccess({ res, data: updated });
     } catch (error) {
       next(error);
