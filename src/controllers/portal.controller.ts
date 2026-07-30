@@ -1424,102 +1424,40 @@ export class PortalController {
   async getStaffTasks(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const companyId = req.user?.companyId;
-      let orders = await prisma.workOrder.findMany({
+
+      // 1. Fetch ServiceRequests
+      const serviceRequests = await prisma.serviceRequest.findMany({
         where: companyId ? { companyId } : {},
-        include: { property: true },
         orderBy: { createdAt: 'desc' },
       });
 
-      const firstProperty = await prisma.property.findFirst({
+      // 2. Fetch WorkOrders
+      const orders = await prisma.workOrder.findMany({
         where: companyId ? { companyId } : {},
-      });
-      let propertyId = firstProperty?.id;
-
-      if (!propertyId) {
-        const owner = await prisma.owner.findFirst({
-          where: companyId ? { companyId } : {},
-        });
-        const newProp = await prisma.property.create({
-          data: {
-            name: 'Oakridge Heights',
-            address: '100 Main St, Austin, TX 78701',
-            streetAddress: '100 Main St',
-            city: 'Austin',
-            state: 'TX',
-            zip: '78701',
-            yearBuilt: 2018,
-            squareFootage: 12000,
-            purchasePrice: 1500000,
-            currentValue: 1800000,
-            ownerId: owner?.id || 'default-owner',
-            companyId,
-          },
-        });
-        propertyId = newProp.id;
-      }
-
-      if (orders.length === 0) {
-        await prisma.workOrder.createMany({
-          data: [
-            {
-              title: 'HVAC Air Conditioner Filter Replacement',
-              description: 'AC unit blowing warm air, filter replacement required.',
-              priority: 'High',
-              status: 'Open',
-              propertyId: propertyId,
-              estimatedCost: 180,
-            },
-            {
-              title: 'Plumbing Sink Leak Repair',
-              description: 'Kitchen sink pipe leaking continuously.',
-              priority: 'Normal',
-              status: 'InProgress',
-              propertyId: propertyId,
-              estimatedCost: 120,
-            },
-            {
-              title: 'Electrical Panel Inspection & Outlet Repair',
-              description: 'Master bedroom outlet sparking.',
-              priority: 'Emergency',
-              status: 'Open',
-              propertyId: propertyId,
-              estimatedCost: 250,
-            },
-          ],
-        });
-      }
-
-      if (!orders.some((o: any) => ['Completed', 'Closed', 'Rejected'].includes(o.status))) {
-        await prisma.workOrder.createMany({
-          data: [
-            {
-              title: 'Water Heater Element Replacement',
-              description: 'Replaced faulty heating element and flushed 50 gal tank.',
-              priority: 'High',
-              status: 'Completed',
-              propertyId: propertyId,
-              estimatedCost: 350,
-              actualCost: 320,
-            },
-            {
-              title: 'Smoke Detector Battery Maintenance',
-              description: 'Replaced backup 9V batteries across building hallway sensors.',
-              priority: 'Normal',
-              status: 'Completed',
-              propertyId: propertyId,
-              estimatedCost: 80,
-              actualCost: 65,
-            },
-          ],
-        });
-      }
-
-      orders = await prisma.workOrder.findMany({
-        include: { property: true },
+        include: { property: true, vendor: true },
         orderBy: { createdAt: 'desc' },
       });
 
-      const formatted = orders.map((wo: any, index: number) => ({
+      const formattedServiceRequests = serviceRequests.map((sr: any) => ({
+        id: sr.id,
+        workOrderNumber: `SR-${sr.id.slice(0, 8)}`,
+        propertyName: sr.propertyName || 'Oakridge Heights',
+        unitNumber: sr.unitNumber ? `Unit ${sr.unitNumber}` : 'Unit 102',
+        issue: sr.title,
+        category: sr.category || (sr.title.toLowerCase().includes('hvac') ? 'HVAC' : sr.title.toLowerCase().includes('plumbing') ? 'Plumbing' : 'General'),
+        priority: sr.priority === 'Normal' ? 'Medium' : sr.priority || 'Medium',
+        status: sr.status === 'Open' || sr.status === 'New' ? 'New' : sr.status === 'InProgress' || sr.status === 'In Progress' ? 'In Progress' : sr.status === 'Completed' ? 'Completed' : sr.status === 'Closed' ? 'Closed' : sr.status === 'Rejected' ? 'Rejected' : sr.status === 'Assigned' ? 'Assigned' : sr.status || 'New',
+        assignedTechnician: sr.assignedVendorName || sr.assignedTechnician || 'Maintenance Staff',
+        dueDate: sr.scheduledDate || new Date().toISOString().split('T')[0],
+        createdAt: sr.createdAt ? new Date(sr.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        description: sr.description || '',
+        estimatedCost: sr.estimatedCost || sr.cost || 0,
+        actualCost: sr.cost || 0,
+        rejectReason: sr.notes || null,
+        resolutionNotes: null,
+      }));
+
+      const formattedWorkOrders = orders.map((wo: any, index: number) => ({
         id: wo.id,
         workOrderNumber: `WO-${1001 + index}`,
         propertyName: wo.property?.name || 'Oakridge Heights',
@@ -1528,9 +1466,9 @@ export class PortalController {
         category: wo.title.toLowerCase().includes('hvac') ? 'HVAC' : wo.title.toLowerCase().includes('plumbing') ? 'Plumbing' : 'Electrical',
         priority: wo.priority === 'Normal' ? 'Medium' : wo.priority || 'Medium',
         status: wo.status === 'Open' ? 'New' : wo.status === 'InProgress' ? 'In Progress' : wo.status === 'Completed' ? 'Completed' : wo.status === 'Closed' ? 'Closed' : wo.status === 'Rejected' ? 'Rejected' : wo.status === 'Assigned' ? 'Assigned' : wo.status || 'New',
-        assignedTechnician: 'Technician Lead 1',
-        dueDate: '2026-07-30',
-        createdAt: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : '2026-07-25',
+        assignedTechnician: wo.vendor?.contactName || wo.vendor?.companyName || 'Maintenance Staff',
+        dueDate: new Date().toISOString().split('T')[0],
+        createdAt: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         description: wo.description || '',
         estimatedCost: wo.estimatedCost || 150,
         actualCost: wo.actualCost || 0,
@@ -1538,7 +1476,8 @@ export class PortalController {
         resolutionNotes: wo.resolutionNotes || null,
       }));
 
-      return sendSuccess({ res, data: formatted });
+      const combined = [...formattedServiceRequests, ...formattedWorkOrders];
+      return sendSuccess({ res, data: combined });
     } catch (error) {
       next(error);
     }
@@ -1549,7 +1488,6 @@ export class PortalController {
       const id = req.params.id as string;
       const { status, actualCost, rejectReason, resolutionNotes } = req.body;
 
-      // Map frontend status string → Prisma WorkOrderStatus enum value
       const statusMap: Record<string, string> = {
         'Open': 'Open',
         'New': 'Open',
@@ -1567,6 +1505,22 @@ export class PortalController {
 
       const mappedStatus = status ? (statusMap[status] ?? status) : undefined;
 
+      // First try updating ServiceRequest if ID matches
+      const existingSr = await prisma.serviceRequest.findUnique({ where: { id } });
+      if (existingSr) {
+        const srStatus = mappedStatus === 'InProgress' ? 'In Progress' : mappedStatus;
+        const updatedSr = await prisma.serviceRequest.update({
+          where: { id },
+          data: {
+            ...(srStatus && { status: srStatus }),
+            ...(actualCost !== undefined && actualCost !== null && { cost: parseFloat(String(actualCost)) }),
+            ...(rejectReason && { notes: rejectReason }),
+          },
+        });
+        return sendSuccess({ res, data: updatedSr });
+      }
+
+      // Otherwise update WorkOrder
       const order = await prisma.workOrder.update({
         where: { id },
         data: {
