@@ -100,19 +100,41 @@ class WorkOrderController {
                     throw new Error('WorkOrder not found.');
             }
             const statusMap = {
-                'Open': 'Open', 'In Progress': 'InProgress', 'InProgress': 'InProgress',
-                'Completed': 'Completed', 'Cancelled': 'Cancelled', 'Closed': 'Closed',
+                'Open': 'Open',
+                'New': 'Submitted',
+                'Submitted': 'Submitted',
+                'Approved': 'Approved',
+                'Assigned': 'Assigned',
+                'Accepted': 'Accepted',
+                'InProgress': 'InProgress',
+                'In Progress': 'InProgress',
+                'Completed': 'Completed',
+                'Rejected': 'Rejected',
+                'Cancelled': 'Cancelled',
+                'Closed': 'Closed',
+                'Returned': 'Returned',
             };
+            const finalStatus = status ? (statusMap[status] ?? status) : undefined;
+            // Assign manager tracking fields on status transitions
+            const managerUserId = req.user?.userId;
+            const approvedByManagerId = finalStatus === 'Approved' || finalStatus === 'Assigned' ? managerUserId : undefined;
+            const closedByManagerId = finalStatus === 'Closed' ? managerUserId : undefined;
             const workOrder = await database_js_1.default.workOrder.update({
                 where: { id },
                 data: {
-                    ...(status && { status: statusMap[status] ?? status }),
+                    ...(finalStatus && { status: finalStatus }),
                     ...(priority && { priority }),
                     ...(estimatedCost !== undefined && { estimatedCost: parseFloat(estimatedCost) }),
                     ...(actualCost !== undefined && { actualCost: parseFloat(actualCost) }),
                     ...(vendorId && { vendorId }),
+                    ...(req.body.staffId && { staffId: req.body.staffId }),
+                    ...(approvedByManagerId && { approvedByManagerId }),
+                    ...(closedByManagerId && { closedByManagerId }),
                     ...(rejectReason && { rejectReason }),
                     ...(resolutionNotes && { resolutionNotes }),
+                    ...(req.body.labourCost !== undefined && { labourCost: parseFloat(req.body.labourCost) }),
+                    ...(req.body.materialsCost !== undefined && { materialsCost: parseFloat(req.body.materialsCost) }),
+                    ...(req.body.extraExpenses !== undefined && { extraExpenses: parseFloat(req.body.extraExpenses) }),
                 },
                 include: { property: true, vendor: true },
             });

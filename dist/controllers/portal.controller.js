@@ -195,14 +195,8 @@ class PortalController {
             if (!tenant) {
                 return (0, apiResponse_1.sendSuccess)({ res, data: [] });
             }
-            const tenantName = `${tenant.firstName} ${tenant.lastName}`;
             const orders = await database_1.default.workOrder.findMany({
-                where: tenant.unitId ? {
-                    OR: [
-                        { propertyId: tenant.unit?.propertyId },
-                        { description: { contains: tenantName } }
-                    ]
-                } : { description: { contains: tenantName } },
+                where: { tenantId: tenant.id },
                 include: {
                     property: true,
                 },
@@ -214,7 +208,7 @@ class PortalController {
                 propertyName: wo.property?.name || 'Property',
                 unitName: tenant.unit ? `Unit ${tenant.unit.unitNumber}` : 'Unit',
                 priority: wo.priority || 'Medium',
-                status: wo.status || 'Open',
+                status: wo.status || 'Submitted',
                 date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 description: wo.description || '',
                 preferredTime: 'Morning (8AM - 12PM)',
@@ -247,8 +241,12 @@ class PortalController {
                     title: title || 'General Repair Request',
                     description: `${description || ''} (Requested by: ${tenantName})`,
                     priority: mappedPriority,
-                    status: 'Open',
+                    status: 'Submitted',
                     propertyId: propertyId,
+                    buildingId: tenant?.unit?.buildingId || null,
+                    unitId: tenant?.unitId || null,
+                    tenantId: tenant?.id || null,
+                    companyId: tenant?.companyId || null,
                     estimatedCost: 150,
                 },
                 include: { property: true },
@@ -1346,8 +1344,18 @@ class PortalController {
     async getStaffTasks(req, res, next) {
         try {
             const companyId = req.user?.companyId;
+            const userEmail = req.user?.email;
+            if (!userEmail) {
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            }
+            const staff = await database_1.default.staffProfile.findFirst({
+                where: { email: userEmail },
+            });
+            if (!staff) {
+                return (0, apiResponse_1.sendSuccess)({ res, data: [] });
+            }
             let orders = await database_1.default.workOrder.findMany({
-                where: companyId ? { companyId } : {},
+                where: { staffId: staff.id },
                 include: { property: true },
                 orderBy: { createdAt: 'desc' },
             });
@@ -1384,8 +1392,10 @@ class PortalController {
                             title: 'HVAC Air Conditioner Filter Replacement',
                             description: 'AC unit blowing warm air, filter replacement required.',
                             priority: 'High',
-                            status: 'Open',
+                            status: 'Assigned',
                             propertyId: propertyId,
+                            staffId: staff.id,
+                            companyId,
                             estimatedCost: 180,
                         },
                         {
@@ -1394,47 +1404,28 @@ class PortalController {
                             priority: 'Normal',
                             status: 'InProgress',
                             propertyId: propertyId,
+                            staffId: staff.id,
+                            companyId,
                             estimatedCost: 120,
                         },
                         {
                             title: 'Electrical Panel Inspection & Outlet Repair',
                             description: 'Master bedroom outlet sparking.',
                             priority: 'Emergency',
-                            status: 'Open',
+                            status: 'Assigned',
                             propertyId: propertyId,
+                            staffId: staff.id,
+                            companyId,
                             estimatedCost: 250,
                         },
                     ],
                 });
-            }
-            if (!orders.some((o) => ['Completed', 'Closed', 'Rejected'].includes(o.status))) {
-                await database_1.default.workOrder.createMany({
-                    data: [
-                        {
-                            title: 'Water Heater Element Replacement',
-                            description: 'Replaced faulty heating element and flushed 50 gal tank.',
-                            priority: 'High',
-                            status: 'Completed',
-                            propertyId: propertyId,
-                            estimatedCost: 350,
-                            actualCost: 320,
-                        },
-                        {
-                            title: 'Smoke Detector Battery Maintenance',
-                            description: 'Replaced backup 9V batteries across building hallway sensors.',
-                            priority: 'Normal',
-                            status: 'Completed',
-                            propertyId: propertyId,
-                            estimatedCost: 80,
-                            actualCost: 65,
-                        },
-                    ],
+                orders = await database_1.default.workOrder.findMany({
+                    where: { staffId: staff.id },
+                    include: { property: true },
+                    orderBy: { createdAt: 'desc' },
                 });
             }
-            orders = await database_1.default.workOrder.findMany({
-                include: { property: true },
-                orderBy: { createdAt: 'desc' },
-            });
             const formatted = orders.map((wo, index) => ({
                 id: wo.id,
                 workOrderNumber: `WO-${1001 + index}`,
@@ -1444,7 +1435,7 @@ class PortalController {
                 category: wo.title.toLowerCase().includes('hvac') ? 'HVAC' : wo.title.toLowerCase().includes('plumbing') ? 'Plumbing' : 'Electrical',
                 priority: wo.priority === 'Normal' ? 'Medium' : wo.priority || 'Medium',
                 status: wo.status === 'Open' ? 'New' : wo.status === 'InProgress' ? 'In Progress' : wo.status === 'Completed' ? 'Completed' : wo.status === 'Closed' ? 'Closed' : wo.status === 'Rejected' ? 'Rejected' : wo.status === 'Assigned' ? 'Assigned' : wo.status || 'New',
-                assignedTechnician: 'Technician Lead 1',
+                assignedTechnician: staff.name || 'Technician Lead 1',
                 dueDate: '2026-07-30',
                 createdAt: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : '2026-07-25',
                 description: wo.description || '',
@@ -1452,6 +1443,9 @@ class PortalController {
                 actualCost: wo.actualCost || 0,
                 rejectReason: wo.rejectReason || null,
                 resolutionNotes: wo.resolutionNotes || null,
+                labourCost: wo.labourCost || 0,
+                materialsCost: wo.materialsCost || 0,
+                extraExpenses: wo.extraExpenses || 0,
             }));
             return (0, apiResponse_1.sendSuccess)({ res, data: formatted });
         }
@@ -1462,30 +1456,56 @@ class PortalController {
     async updateStaffTaskStatus(req, res, next) {
         try {
             const id = req.params.id;
-            const { status, actualCost, rejectReason, resolutionNotes } = req.body;
+            const { status, actualCost, rejectReason, resolutionNotes, labourCost, materialsCost, extraExpenses } = req.body;
+            const userEmail = req.user?.email;
+            const staff = await database_1.default.staffProfile.findFirst({
+                where: { email: userEmail },
+            });
+            if (!staff) {
+                throw new Error('Unauthorized: Staff profile not found.');
+            }
+            // Check task assignment
+            const checkOrder = await database_1.default.workOrder.findFirst({
+                where: { id, staffId: staff.id },
+            });
+            if (!checkOrder) {
+                throw new Error('Unauthorized or task not found.');
+            }
             // Map frontend status string → Prisma WorkOrderStatus enum value
             const statusMap = {
                 'Open': 'Open',
-                'New': 'Open',
+                'New': 'Submitted',
+                'Submitted': 'Submitted',
+                'Approved': 'Approved',
                 'Assigned': 'Assigned',
-                'Scheduled': 'Assigned',
-                'Draft': 'Open',
-                'In Progress': 'InProgress',
-                'In_Progress': 'InProgress',
+                'Accepted': 'Accepted',
                 'InProgress': 'InProgress',
+                'In Progress': 'InProgress',
                 'Completed': 'Completed',
                 'Rejected': 'Rejected',
                 'Cancelled': 'Cancelled',
                 'Closed': 'Closed',
+                'Returned': 'Returned',
             };
             const mappedStatus = status ? (statusMap[status] ?? status) : undefined;
+            // Automatically compute actualCost if components are provided
+            const finalLabour = labourCost !== undefined && labourCost !== null ? parseFloat(String(labourCost)) : checkOrder.labourCost || 0;
+            const finalMaterials = materialsCost !== undefined && materialsCost !== null ? parseFloat(String(materialsCost)) : checkOrder.materialsCost || 0;
+            const finalExtra = extraExpenses !== undefined && extraExpenses !== null ? parseFloat(String(extraExpenses)) : checkOrder.extraExpenses || 0;
+            const computedActualCost = (labourCost !== undefined || materialsCost !== undefined || extraExpenses !== undefined)
+                ? (finalLabour + finalMaterials + finalExtra)
+                : (actualCost !== undefined && actualCost !== null ? parseFloat(String(actualCost)) : undefined);
             const order = await database_1.default.workOrder.update({
                 where: { id },
                 data: {
                     ...(mappedStatus && { status: mappedStatus }),
-                    ...(actualCost !== undefined && actualCost !== null && { actualCost: parseFloat(String(actualCost)) }),
+                    ...(computedActualCost !== undefined && { actualCost: computedActualCost }),
+                    ...(labourCost !== undefined && labourCost !== null && { labourCost: parseFloat(String(labourCost)) }),
+                    ...(materialsCost !== undefined && materialsCost !== null && { materialsCost: parseFloat(String(materialsCost)) }),
+                    ...(extraExpenses !== undefined && extraExpenses !== null && { extraExpenses: parseFloat(String(extraExpenses)) }),
                     ...(rejectReason && { rejectReason }),
                     ...(resolutionNotes && { resolutionNotes }),
+                    ...(mappedStatus === 'Completed' && { completedAt: new Date() }),
                 },
             });
             return (0, apiResponse_1.sendSuccess)({ res, data: order });
