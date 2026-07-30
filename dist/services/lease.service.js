@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.leaseService = exports.LeaseService = void 0;
 const database_1 = __importDefault(require("../config/database"));
+const auditHelper_1 = require("../utils/auditHelper");
 class LeaseService {
     async getAllLeases(companyId) {
         return database_1.default.lease.findMany({
@@ -41,10 +42,11 @@ class LeaseService {
                     companyId: data.companyId,
                 },
             });
+            const validUserId = await (0, auditHelper_1.getValidUserId)(data.userId, tx);
             await tx.auditLog.create({
                 data: {
                     action: 'Lease Created & Move In Scheduled',
-                    userId: data.userId || null,
+                    userId: validUserId,
                     module: 'Leasing',
                     object: `Lease ${lease.id}`,
                     ip: '127.0.0.1',

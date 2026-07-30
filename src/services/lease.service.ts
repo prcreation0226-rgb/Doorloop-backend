@@ -1,4 +1,5 @@
 import prisma from '../config/database';
+import { getValidUserId } from '../utils/auditHelper';
 
 export class LeaseService {
   async getAllLeases(companyId?: string) {
@@ -39,10 +40,11 @@ export class LeaseService {
         },
       });
 
+      const validUserId = await getValidUserId(data.userId, tx);
       await tx.auditLog.create({
         data: {
           action: 'Lease Created & Move In Scheduled',
-          userId: data.userId || null,
+          userId: validUserId,
           module: 'Leasing',
           object: `Lease ${lease.id}`,
           ip: '127.0.0.1',
