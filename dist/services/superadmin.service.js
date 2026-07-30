@@ -74,8 +74,9 @@ class SuperAdminService {
             where: { id },
         });
     }
-    async getCompanyUsers() {
+    async getCompanyUsers(companyId) {
         const companyUsers = await database_1.default.companyUser.findMany({
+            where: companyId ? { companyId } : {},
             include: { company: true },
             orderBy: { createdAt: 'desc' },
         });
@@ -94,7 +95,7 @@ class SuperAdminService {
     async createCompanyUser(data) {
         let finalCompanyId = await (0, companyHelper_1.getManagerCompanyId)(undefined, data.companyId);
         // Map user-facing "Maintenance" role to "Maintenance Staff"
-        let mappedRole = data.role || 'Admin';
+        let mappedRole = data.role || 'Property Manager';
         if (mappedRole === 'Maintenance') {
             mappedRole = 'Maintenance Staff';
         }

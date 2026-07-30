@@ -78,8 +78,9 @@ export class SuperAdminService {
     });
   }
 
-  async getCompanyUsers() {
+  async getCompanyUsers(companyId?: string) {
     const companyUsers = await prisma.companyUser.findMany({
+      where: companyId ? { companyId } : {},
       include: { company: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -102,7 +103,7 @@ export class SuperAdminService {
     let finalCompanyId = await getManagerCompanyId(undefined, data.companyId);
 
     // Map user-facing "Maintenance" role to "Maintenance Staff"
-    let mappedRole = data.role || 'Admin';
+    let mappedRole = data.role || 'Property Manager';
     if (mappedRole === 'Maintenance') {
       mappedRole = 'Maintenance Staff';
     }

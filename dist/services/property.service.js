@@ -11,7 +11,7 @@ const companyHelper_1 = require("../utils/companyHelper");
 class PropertyService {
     async getAllProperties(companyId, user) {
         let whereClause = companyId ? { companyId } : {};
-        if (user?.role === 'Owner' && user?.email) {
+        if ((user?.roleName === 'Owner' || user?.role === 'Owner') && user?.email) {
             const owner = await database_1.default.owner.findFirst({
                 where: { email: user.email },
             });

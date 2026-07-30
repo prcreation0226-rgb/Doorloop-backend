@@ -56,7 +56,8 @@ class SuperAdminController {
     // Company Users
     async getCompanyUsers(req, res, next) {
         try {
-            const list = await superadmin_service_1.superAdminService.getCompanyUsers();
+            const companyId = req.user?.companyId;
+            const list = await superadmin_service_1.superAdminService.getCompanyUsers(companyId);
             return (0, apiResponse_1.sendSuccess)({ res, data: list });
         }
         catch (error) {

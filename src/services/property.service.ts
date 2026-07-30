@@ -7,7 +7,7 @@ export class PropertyService {
   async getAllProperties(companyId?: string, user?: any) {
     let whereClause: any = companyId ? { companyId } : {};
 
-    if (user?.role === 'Owner' && user?.email) {
+    if ((user?.roleName === 'Owner' || user?.role === 'Owner') && user?.email) {
       const owner = await prisma.owner.findFirst({
         where: { email: user.email },
       });
