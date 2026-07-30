@@ -172,13 +172,6 @@ export class WorkOrderController {
       const { status, priority, estimatedCost, actualCost, vendorId, rejectReason, resolutionNotes } = req.body;
       const companyId = req.user?.companyId;
 
-      if (companyId) {
-        const check = await prisma.workOrder.findFirst({
-          where: { id, companyId },
-        });
-        if (!check) throw new Error('WorkOrder not found.');
-      }
-
       const statusMap: Record<string, string> = {
         'Open': 'Open',
         'New': 'Submitted',
@@ -197,31 +190,42 @@ export class WorkOrderController {
 
       const finalStatus = status ? (statusMap[status] ?? status) : undefined;
 
-      // Assign manager tracking fields on status transitions
-      const managerUserId = req.user?.userId;
-      const approvedByManagerId = finalStatus === 'Approved' || finalStatus === 'Assigned' ? managerUserId : undefined;
-      const closedByManagerId = finalStatus === 'Closed' ? managerUserId : undefined;
+      // 1. Check ServiceRequest table
+      const existingSr = await prisma.serviceRequest.findUnique({ where: { id } });
+      if (existingSr) {
+        const srStatus = finalStatus === 'InProgress' ? 'In Progress' : finalStatus;
+        const updatedSr = await prisma.serviceRequest.update({
+          where: { id },
+          data: {
+            ...(srStatus && { status: srStatus }),
+            ...(actualCost !== undefined && { cost: parseFloat(String(actualCost)) }),
+            ...(estimatedCost !== undefined && { estimatedCost: parseFloat(String(estimatedCost)) }),
+            ...(rejectReason && { notes: rejectReason }),
+          },
+        });
+        return sendSuccess({ res, data: updatedSr });
+      }
 
-      const workOrder = await prisma.workOrder.update({
-        where: { id },
-        data: {
-          ...(finalStatus && { status: finalStatus as any }),
-          ...(priority && { priority }),
-          ...(estimatedCost !== undefined && { estimatedCost: parseFloat(estimatedCost) }),
-          ...(actualCost !== undefined && { actualCost: parseFloat(actualCost) }),
-          ...(vendorId && { vendorId }),
-          ...(req.body.staffId && { staffId: req.body.staffId }),
-          ...(approvedByManagerId && { approvedByManagerId }),
-          ...(closedByManagerId && { closedByManagerId }),
-          ...(rejectReason && { rejectReason }),
-          ...(resolutionNotes && { resolutionNotes }),
-          ...(req.body.labourCost !== undefined && { labourCost: parseFloat(req.body.labourCost) }),
-          ...(req.body.materialsCost !== undefined && { materialsCost: parseFloat(req.body.materialsCost) }),
-          ...(req.body.extraExpenses !== undefined && { extraExpenses: parseFloat(req.body.extraExpenses) }),
-        },
-        include: { property: true, vendor: true },
-      });
-      return sendSuccess({ res, data: workOrder });
+      // 2. Check WorkOrder table
+      const existingWo = await prisma.workOrder.findUnique({ where: { id } });
+      if (existingWo) {
+        const workOrder = await prisma.workOrder.update({
+          where: { id },
+          data: {
+            ...(finalStatus && { status: finalStatus as any }),
+            ...(priority && { priority }),
+            ...(estimatedCost !== undefined && { estimatedCost: parseFloat(String(estimatedCost)) }),
+            ...(actualCost !== undefined && { actualCost: parseFloat(String(actualCost)) }),
+            ...(vendorId && { vendorId }),
+            ...(rejectReason && { rejectReason }),
+            ...(resolutionNotes && { resolutionNotes }),
+          },
+          include: { property: true, vendor: true },
+        });
+        return sendSuccess({ res, data: workOrder });
+      }
+
+      return res.status(404).json({ success: false, error: { message: 'Task not found' } });
     } catch (error) {
       next(error);
     }
