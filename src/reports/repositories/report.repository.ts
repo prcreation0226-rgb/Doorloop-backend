@@ -141,7 +141,6 @@ export class ReportRepository {
         where: whereClause,
         include: {
           tenant: true,
-          property: true,
         },
         orderBy,
         skip,

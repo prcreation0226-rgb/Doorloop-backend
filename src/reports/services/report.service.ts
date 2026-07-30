@@ -154,7 +154,7 @@ export class ReportService {
 
       return {
         tenantName: inv.tenant ? `${inv.tenant.firstName} ${inv.tenant.lastName}` : 'N/A',
-        propertyName: inv.property?.name || 'N/A',
+        propertyName: inv.propertyName || 'N/A',
         unitNumber: inv.unitNumber || 'N/A',
         dueDate: inv.dueDate,
         rentAmount: inv.amount,
@@ -304,7 +304,7 @@ export class ReportService {
       tenantName: p.tenant ? `${p.tenant.firstName} ${p.tenant.lastName}` : 'N/A',
       propertyName: p.property?.name || 'N/A',
       unitNumber: p.unit?.unitNumber || 'N/A',
-      paymentDate: p.paidDate || p.createdAt,
+      paymentDate: p.paidDate || p.dueDate,
       amount: p.amount,
       paymentMethod: p.paymentMethod,
       referenceNumber: p.referenceNumber || 'N/A',
