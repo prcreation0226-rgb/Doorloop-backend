@@ -13,7 +13,6 @@ export class ReportController {
       await prisma.auditLog.create({
         data: {
           userId: user.id,
-          companyId: user.companyId || null,
           action,
           module: 'Reports',
           object: reportName,

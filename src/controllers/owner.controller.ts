@@ -165,34 +165,91 @@ export class OwnerController {
         return res.status(404).json({ success: false, error: 'Owner not found' });
       }
 
-      await prisma.$transaction(async (tx) => {
-        // 1. Delete associated owner distributions
-        await tx.ownerDistribution.deleteMany({
-          where: { ownerId: id },
-        });
-
-        // 2. Delete associated owner documents
-        await tx.ownerDocument.deleteMany({
-          where: { ownerId: id },
-        });
-
-        // 3. Delete associated properties
-        const properties = await tx.property.findMany({
-          where: { ownerId: id },
-          select: { id: true },
-        });
-
-        for (const prop of properties) {
-          await tx.property.delete({
-            where: { id: prop.id },
+      await prisma.$transaction(
+        async (tx) => {
+          // 1. Delete associated owner distributions
+          await tx.ownerDistribution.deleteMany({
+            where: { ownerId: id },
           });
-        }
 
-        // 4. Delete the owner record
-        await tx.owner.delete({
-          where: { id },
-        });
-      });
+          // 2. Delete associated owner documents
+          await tx.ownerDocument.deleteMany({
+            where: { ownerId: id },
+          });
+
+          // 3. Find properties owned by this owner
+          const properties = await tx.property.findMany({
+            where: { ownerId: id },
+            select: { id: true },
+          });
+
+          for (const prop of properties) {
+            const propertyId = prop.id;
+
+            // Delete rent payments linked to property
+            await tx.rentPayment.deleteMany({
+              where: { propertyId },
+            });
+
+            // Find leases linked to property and clean up MoveIn / MoveOut / Leases
+            const leases = await tx.lease.findMany({
+              where: { propertyId },
+              select: { id: true },
+            });
+            const leaseIds = leases.map((l) => l.id);
+            if (leaseIds.length > 0) {
+              await tx.moveIn.deleteMany({
+                where: { leaseId: { in: leaseIds } },
+              });
+              await tx.moveOut.deleteMany({
+                where: { leaseId: { in: leaseIds } },
+              });
+              await tx.lease.deleteMany({
+                where: { propertyId },
+              });
+            }
+
+            // Delete work orders linked to property
+            await tx.workOrder.deleteMany({
+              where: { propertyId },
+            });
+
+            // Delete service requests linked to property
+            await tx.serviceRequest.deleteMany({
+              where: { propertyId },
+            });
+
+            // Delete tenant documents linked to property
+            await tx.tenantDocument.deleteMany({
+              where: { propertyId },
+            });
+
+            // Delete owner documents linked to property
+            await tx.ownerDocument.deleteMany({
+              where: { propertyId },
+            });
+
+            // Delete units and buildings
+            await tx.unit.deleteMany({
+              where: { propertyId },
+            });
+            await tx.building.deleteMany({
+              where: { propertyId },
+            });
+
+            // Delete property
+            await tx.property.delete({
+              where: { id: propertyId },
+            });
+          }
+
+          // 4. Finally delete the owner record
+          await tx.owner.delete({
+            where: { id },
+          });
+        },
+        { maxWait: 10000, timeout: 30000 }
+      );
 
       return sendSuccess({ res, message: 'Owner deleted successfully' });
     } catch (error) {

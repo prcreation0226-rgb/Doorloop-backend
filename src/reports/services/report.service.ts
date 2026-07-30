@@ -262,7 +262,7 @@ export class ReportService {
       estimatedCost: w.estimatedCost || 0,
       actualCost: w.actualCost || 0,
       createdDate: w.createdAt,
-      completedDate: w.completedAt || null,
+      completedDate: (w as any).completedAt || null,
     }));
 
     return {

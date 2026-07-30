@@ -14,7 +14,7 @@ const envSchema = zod_1.z.object({
     CORS_ORIGIN: zod_1.z.string().default('http://localhost:5173'),
     DATABASE_URL: zod_1.z.string().default('postgresql://postgres:postgres@localhost:5432/doorloop_erp?schema=public'),
     JWT_ACCESS_SECRET: zod_1.z.string().default('doorloop_access_token_secret_key_2026_super_secure'),
-    JWT_ACCESS_EXPIRES_IN: zod_1.z.string().default('15m'),
+    JWT_ACCESS_EXPIRES_IN: zod_1.z.string().default('7d'),
     JWT_REFRESH_SECRET: zod_1.z.string().default('doorloop_refresh_token_secret_key_2026_super_secure'),
     JWT_REFRESH_EXPIRES_IN: zod_1.z.string().default('7d'),
     BCRYPT_SALT_ROUNDS: zod_1.z.string().transform(Number).default('12'),

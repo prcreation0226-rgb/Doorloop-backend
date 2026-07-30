@@ -27,6 +27,7 @@ const moveOut_routes_1 = __importDefault(require("./moveOut.routes"));
 const inspectionTemplate_routes_1 = __importDefault(require("./inspectionTemplate.routes"));
 const inspection_routes_1 = __importDefault(require("./inspection.routes"));
 const document_routes_1 = __importDefault(require("./document.routes"));
+const report_routes_1 = __importDefault(require("../reports/routes/report.routes"));
 const auth_middleware_1 = require("../middlewares/auth.middleware");
 const router = (0, express_1.Router)();
 router.get('/health', (req, res) => {
@@ -58,5 +59,6 @@ router.use('/move-outs', auth_middleware_1.authMiddleware, moveOut_routes_1.defa
 router.use('/inspection-templates', auth_middleware_1.authMiddleware, inspectionTemplate_routes_1.default);
 router.use('/inspections', auth_middleware_1.authMiddleware, inspection_routes_1.default);
 router.use('/documents', auth_middleware_1.authMiddleware, document_routes_1.default);
+router.use('/reports', auth_middleware_1.authMiddleware, report_routes_1.default);
 router.use('/', auth_middleware_1.authMiddleware, secondary_routes_1.default);
 exports.default = router;

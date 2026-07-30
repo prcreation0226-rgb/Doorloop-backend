@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const report_controller_1 = require("../controllers/report.controller");
+const router = (0, express_1.Router)();
+router.get('/rent-roll', (req, res, next) => report_controller_1.reportController.getRentRoll(req, res, next));
+router.get('/occupancy', (req, res, next) => report_controller_1.reportController.getOccupancy(req, res, next));
+router.get('/delinquency', (req, res, next) => report_controller_1.reportController.getDelinquency(req, res, next));
+router.get('/profit-loss', (req, res, next) => report_controller_1.reportController.getProfitLoss(req, res, next));
+router.get('/maintenance', (req, res, next) => report_controller_1.reportController.getMaintenance(req, res, next));
+router.get('/payment-history', (req, res, next) => report_controller_1.reportController.getPaymentHistory(req, res, next));
+router.get('/exports', (req, res, next) => report_controller_1.reportController.getExports(req, res, next));
+router.post('/exports', (req, res, next) => report_controller_1.reportController.createExport(req, res, next));
+exports.default = router;
