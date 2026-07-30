@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { InspectionStatus, MoveInStatus, InspectionCondition } from '@prisma/client';
+import { getValidUserId } from '../utils/auditHelper';
 
 export class InspectionService {
   async getInspectionById(id: string, companyId?: string) {
@@ -122,10 +123,11 @@ export class InspectionService {
           },
         });
 
+        const validUserId = await getValidUserId(data.userId, tx);
         await tx.auditLog.create({
           data: {
             action: `Inspection ${inspectionNumber} Started`,
-            userId: data.userId || null,
+            userId: validUserId,
             module: 'Leasing',
             object: `Inspection ${inspection.id}`,
             ip: '127.0.0.1',
@@ -301,10 +303,11 @@ export class InspectionService {
         });
       }
 
+      const validUserId = await getValidUserId(userId, tx);
       await tx.auditLog.create({
         data: {
           action: `Inspection ${inspection.inspectionNumber} Completed`,
-          userId: userId || null,
+          userId: validUserId,
           module: 'Leasing',
           object: `Inspection ${id}`,
           ip: '127.0.0.1',
@@ -340,10 +343,11 @@ export class InspectionService {
         });
       }
 
+      const validUserId = await getValidUserId(userId, tx);
       await tx.auditLog.create({
         data: {
           action: `Inspection ${inspection.inspectionNumber} Reopened`,
-          userId: userId || null,
+          userId: validUserId,
           module: 'Leasing',
           object: `Inspection ${id}`,
           ip: '127.0.0.1',

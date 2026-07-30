@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.inspectionService = exports.InspectionService = void 0;
 const database_1 = __importDefault(require("../config/database"));
+const auditHelper_1 = require("../utils/auditHelper");
 class InspectionService {
     async getInspectionById(id, companyId) {
         return database_1.default.inspection.findFirst({
@@ -121,10 +122,11 @@ class InspectionService {
                         : undefined,
                 },
             });
+            const validUserId = await (0, auditHelper_1.getValidUserId)(data.userId, tx);
             await tx.auditLog.create({
                 data: {
                     action: `Inspection ${inspectionNumber} Started`,
-                    userId: data.userId || null,
+                    userId: validUserId,
                     module: 'Leasing',
                     object: `Inspection ${inspection.id}`,
                     ip: '127.0.0.1',
@@ -292,10 +294,11 @@ class InspectionService {
                     },
                 });
             }
+            const validUserId = await (0, auditHelper_1.getValidUserId)(userId, tx);
             await tx.auditLog.create({
                 data: {
                     action: `Inspection ${inspection.inspectionNumber} Completed`,
-                    userId: userId || null,
+                    userId: validUserId,
                     module: 'Leasing',
                     object: `Inspection ${id}`,
                     ip: '127.0.0.1',
@@ -327,10 +330,11 @@ class InspectionService {
                     },
                 });
             }
+            const validUserId = await (0, auditHelper_1.getValidUserId)(userId, tx);
             await tx.auditLog.create({
                 data: {
                     action: `Inspection ${inspection.inspectionNumber} Reopened`,
-                    userId: userId || null,
+                    userId: validUserId,
                     module: 'Leasing',
                     object: `Inspection ${id}`,
                     ip: '127.0.0.1',
