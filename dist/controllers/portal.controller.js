@@ -1335,78 +1335,55 @@ class PortalController {
         try {
             const companyId = req.user?.companyId;
             const userEmail = req.user?.email;
-            let staff = null;
             let vendor = null;
             if (userEmail) {
-                staff = await database_1.default.staffProfile.findFirst({ where: { email: userEmail } });
                 vendor = await database_1.default.vendor.findFirst({ where: { email: userEmail } });
+            }
+            // Build query filter for ServiceRequests
+            const srWhere = {};
+            if (companyId) {
+                srWhere.companyId = companyId;
+            }
+            if (vendor) {
+                srWhere.OR = [
+                    { assignedVendorId: vendor.id },
+                    { assignedVendorName: vendor.contactName || vendor.companyName },
+                    { assignedTechnician: vendor.contactName }
+                ];
+                if (companyId) {
+                    srWhere.companyId = companyId;
+                }
+            }
+            // Build query filter for WorkOrders
+            const woWhere = {};
+            if (companyId) {
+                woWhere.companyId = companyId;
+            }
+            if (vendor) {
+                woWhere.vendorId = vendor.id;
             }
             // 1. Fetch ServiceRequests
             const serviceRequests = await database_1.default.serviceRequest.findMany({
-                where: companyId ? { OR: [{ companyId }, { companyId: null }] } : {},
+                where: Object.keys(srWhere).length > 0 ? srWhere : (companyId ? { companyId } : {}),
                 orderBy: { createdAt: 'desc' },
             });
             // 2. Fetch WorkOrders
-            let workOrders = await database_1.default.workOrder.findMany({
-                where: companyId ? { OR: [{ companyId }, { companyId: null }] } : {},
+            const workOrders = await database_1.default.workOrder.findMany({
+                where: Object.keys(woWhere).length > 0 ? woWhere : (companyId ? { companyId } : {}),
                 include: { property: true, vendor: true },
                 orderBy: { createdAt: 'desc' },
             });
-            // Seed default work orders if both lists are empty
-            if (serviceRequests.length === 0 && workOrders.length === 0) {
-                const property = await database_1.default.property.findFirst({
-                    where: companyId ? { OR: [{ companyId }, { companyId: null }] } : {},
-                });
-                if (property) {
-                    await database_1.default.workOrder.createMany({
-                        data: [
-                            {
-                                title: 'HVAC Air Conditioner Filter Replacement',
-                                description: 'AC unit blowing warm air, filter replacement required.',
-                                priority: 'High',
-                                status: 'Assigned',
-                                propertyId: property.id,
-                                companyId,
-                                estimatedCost: 180,
-                            },
-                            {
-                                title: 'Plumbing Sink Leak Repair',
-                                description: 'Kitchen sink pipe leaking continuously.',
-                                priority: 'Normal',
-                                status: 'InProgress',
-                                propertyId: property.id,
-                                companyId,
-                                estimatedCost: 120,
-                            },
-                            {
-                                title: 'Electrical Panel Inspection & Outlet Repair',
-                                description: 'Master bedroom outlet sparking.',
-                                priority: 'Emergency',
-                                status: 'Assigned',
-                                propertyId: property.id,
-                                companyId,
-                                estimatedCost: 250,
-                            },
-                        ],
-                    });
-                    workOrders = await database_1.default.workOrder.findMany({
-                        where: companyId ? { OR: [{ companyId }, { companyId: null }] } : {},
-                        include: { property: true, vendor: true },
-                        orderBy: { createdAt: 'desc' },
-                    });
-                }
-            }
             const formattedServiceRequests = serviceRequests.map((sr) => ({
                 id: sr.id,
-                workOrderNumber: `SR-${sr.id.slice(0, 8)}`,
-                propertyName: sr.propertyName || 'Oakridge Heights',
-                unitNumber: sr.unitNumber ? (sr.unitNumber.toLowerCase().includes('unit') ? sr.unitNumber : `Unit ${sr.unitNumber}`) : 'Unit 102',
+                workOrderNumber: `SR-${sr.id.slice(0, 8).toUpperCase()}`,
+                propertyName: sr.propertyName || 'Property',
+                unitNumber: sr.unitNumber ? (sr.unitNumber.toLowerCase().includes('unit') ? sr.unitNumber : `Unit ${sr.unitNumber}`) : '',
                 issue: sr.title,
                 category: sr.category || (sr.title.toLowerCase().includes('hvac') ? 'HVAC' : sr.title.toLowerCase().includes('plumbing') ? 'Plumbing' : 'General'),
                 priority: sr.priority === 'Normal' ? 'Medium' : sr.priority || 'Medium',
                 status: sr.status === 'Open' || sr.status === 'New' || sr.status === 'Submitted' ? 'New' : sr.status === 'InProgress' || sr.status === 'In Progress' ? 'In Progress' : sr.status === 'Completed' ? 'Completed' : sr.status === 'Closed' ? 'Closed' : sr.status === 'Rejected' ? 'Rejected' : sr.status === 'Assigned' ? 'Assigned' : sr.status || 'New',
                 assignedTechnician: sr.assignedVendorName || sr.assignedTechnician || (vendor ? (vendor.contactName || vendor.companyName) : 'Maintenance Staff'),
-                dueDate: sr.scheduledDate || new Date().toISOString().split('T')[0],
+                dueDate: sr.scheduledDate || (sr.createdAt ? new Date(sr.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
                 createdAt: sr.createdAt ? new Date(sr.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 description: sr.description || '',
                 estimatedCost: sr.estimatedCost || sr.cost || 0,
@@ -1420,17 +1397,17 @@ class PortalController {
             const formattedWorkOrders = workOrders.map((wo, index) => ({
                 id: wo.id,
                 workOrderNumber: `WO-${1001 + index}`,
-                propertyName: wo.property?.name || 'Oakridge Heights',
-                unitNumber: 'Unit 402',
+                propertyName: wo.property?.name || 'Property',
+                unitNumber: 'Unit 101',
                 issue: wo.title,
-                category: wo.title.toLowerCase().includes('hvac') ? 'HVAC' : wo.title.toLowerCase().includes('plumbing') ? 'Plumbing' : 'Electrical',
+                category: wo.title.toLowerCase().includes('hvac') ? 'HVAC' : wo.title.toLowerCase().includes('plumbing') ? 'Plumbing' : 'General',
                 priority: wo.priority === 'Normal' ? 'Medium' : wo.priority || 'Medium',
                 status: wo.status === 'Open' || wo.status === 'Submitted' ? 'New' : wo.status === 'InProgress' ? 'In Progress' : wo.status === 'Completed' ? 'Completed' : wo.status === 'Closed' ? 'Closed' : wo.status === 'Rejected' ? 'Rejected' : wo.status === 'Assigned' ? 'Assigned' : wo.status || 'New',
-                assignedTechnician: wo.staff?.name || wo.vendor?.contactName || wo.vendor?.companyName || 'Maintenance Staff',
-                dueDate: new Date().toISOString().split('T')[0],
+                assignedTechnician: wo.vendor?.contactName || wo.vendor?.companyName || 'Maintenance Staff',
+                dueDate: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 createdAt: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 description: wo.description || '',
-                estimatedCost: wo.estimatedCost || 150,
+                estimatedCost: wo.estimatedCost || 0,
                 actualCost: wo.actualCost || 0,
                 labourCost: wo.labourCost || 0,
                 materialsCost: wo.materialsCost || 0,
