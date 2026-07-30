@@ -10,45 +10,29 @@ class WorkOrderController {
     async getAll(req, res, next) {
         try {
             const companyId = req.user?.companyId;
-            let workOrders = await database_js_1.default.workOrder.findMany({
+            // 1. Fetch WorkOrders
+            const workOrders = await database_js_1.default.workOrder.findMany({
                 where: companyId ? { companyId } : {},
                 include: { property: true, vendor: true },
                 orderBy: { createdAt: 'desc' },
             });
-            // Seed sample work orders if DB is empty for this company
-            if (workOrders.length === 0) {
-                const property = await database_js_1.default.property.findFirst({
-                    where: companyId ? { companyId } : {},
-                });
-                const vendor = await database_js_1.default.vendor.findFirst();
-                const propertyId = property?.id || 'default-property';
-                const vendorId = vendor?.id || null;
-                const seeds = [
-                    { propertyId, title: 'HVAC Filter Replacement & Diagnostics', description: 'Tenant reports AC not cooling. Replace filters and run full diagnostic.', vendorId, priority: 'High', status: 'InProgress', estimatedCost: 350, actualCost: 0, companyId },
-                    { propertyId, title: 'Water Heater Element Replacement', description: 'Replaced faulty heating element and flushed 50 gal tank.', vendorId, priority: 'Normal', status: 'Completed', estimatedCost: 300, actualCost: 280, companyId },
-                    { propertyId, title: 'Electrical Outlet Repair – Unit 204', description: 'Outlets in kitchen not functioning. Check breaker and wiring.', vendorId, priority: 'High', status: 'Open', estimatedCost: 200, actualCost: 0, companyId },
-                    { propertyId, title: 'Plumbing Leak Under Sink', description: 'Tenant reports slow leak under kitchen sink. Inspect P-trap and supply lines.', vendorId, priority: 'Emergency', status: 'Open', estimatedCost: 180, actualCost: 0, companyId },
-                    { propertyId, title: 'Roof Inspection Post-Storm', description: 'Heavy rain caused minor ceiling stain in Unit 305. Inspect for water intrusion.', vendorId, priority: 'Normal', status: 'Open', estimatedCost: 500, actualCost: 0, companyId },
-                ];
-                await database_js_1.default.workOrder.createMany({ data: seeds });
-                workOrders = await database_js_1.default.workOrder.findMany({
-                    where: companyId ? { companyId } : {},
-                    include: { property: true, vendor: true },
-                    orderBy: { createdAt: 'desc' },
-                });
-            }
-            const formatted = workOrders.map((wo, index) => ({
+            // 2. Fetch ServiceRequests
+            const serviceRequests = await database_js_1.default.serviceRequest.findMany({
+                where: companyId ? { companyId } : {},
+                orderBy: { createdAt: 'desc' },
+            });
+            const formattedWorkOrders = workOrders.map((wo, index) => ({
                 id: wo.id,
-                workOrderNumber: `WO-${40001 + index}`,
+                workOrderNumber: `WO-${1001 + index}`,
                 propertyId: wo.propertyId,
-                propertyName: wo.property?.name || 'Oakridge Heights',
-                unitNumber: 'Unit 102',
+                propertyName: wo.property?.name || 'Property',
+                unitNumber: 'Unit 101',
                 vendorId: wo.vendorId || '',
-                vendorName: wo.vendor?.companyName || 'ProFix Solutions',
-                assignedTechnician: 'Technician Lead 1',
-                scheduledDate: new Date().toISOString().split('T')[0],
+                vendorName: wo.vendor?.companyName || 'Unassigned',
+                assignedTechnician: wo.vendor?.contactName || 'Unassigned',
+                scheduledDate: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 priority: wo.priority || 'Normal',
-                status: wo.status === 'Open' ? 'Open' : wo.status === 'InProgress' ? 'In Progress' : wo.status === 'Completed' ? 'Completed' : wo.status === 'Cancelled' ? 'Cancelled' : wo.status || 'Open',
+                status: wo.status === 'Open' || wo.status === 'Submitted' ? 'Open' : wo.status === 'InProgress' || wo.status === 'In Progress' ? 'In Progress' : wo.status === 'Completed' ? 'Completed' : wo.status === 'Cancelled' ? 'Cancelled' : wo.status || 'Open',
                 estimatedCost: wo.estimatedCost || 0,
                 actualCost: wo.actualCost || 0,
                 title: wo.title,
@@ -57,7 +41,28 @@ class WorkOrderController {
                 rejectReason: wo.rejectReason || null,
                 resolutionNotes: wo.resolutionNotes || null,
             }));
-            return (0, apiResponse_js_1.sendSuccess)({ res, data: formatted });
+            const formattedServiceRequests = serviceRequests.map((sr) => ({
+                id: sr.id,
+                workOrderNumber: `#${sr.id.slice(0, 8)}`,
+                propertyId: sr.propertyId,
+                propertyName: sr.propertyName || 'Property',
+                unitNumber: sr.unitNumber ? (sr.unitNumber.toLowerCase().includes('unit') ? sr.unitNumber : `Unit ${sr.unitNumber}`) : 'Unit 101',
+                vendorId: sr.assignedVendorId || '',
+                vendorName: sr.assignedVendorName || 'Unassigned',
+                assignedTechnician: sr.assignedTechnician || sr.assignedVendorName || 'Unassigned',
+                scheduledDate: sr.scheduledDate || (sr.createdAt ? new Date(sr.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+                priority: sr.priority === 'Normal' ? 'Medium' : sr.priority || 'Medium',
+                status: sr.status === 'Open' || sr.status === 'New' || sr.status === 'Submitted' ? 'Open' : sr.status === 'InProgress' || sr.status === 'In Progress' ? 'In Progress' : sr.status === 'Completed' ? 'Completed' : sr.status === 'Closed' ? 'Closed' : sr.status === 'Rejected' ? 'Rejected' : sr.status === 'Assigned' ? 'Assigned' : sr.status || 'Open',
+                estimatedCost: sr.estimatedCost || sr.cost || 0,
+                actualCost: sr.cost || 0,
+                title: sr.title,
+                description: sr.description || '',
+                createdAt: sr.createdAt ? new Date(sr.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                rejectReason: sr.notes || null,
+                resolutionNotes: null,
+            }));
+            const combined = [...formattedServiceRequests, ...formattedWorkOrders];
+            return (0, apiResponse_js_1.sendSuccess)({ res, data: combined });
         }
         catch (error) {
             next(error);
