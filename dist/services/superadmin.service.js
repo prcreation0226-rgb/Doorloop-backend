@@ -29,37 +29,55 @@ class SuperAdminService {
     }
     async createCompany(data) {
         const code = data.code || data.name.substring(0, 4).toUpperCase();
-        const company = await database_1.default.company.create({
-            data: {
-                name: data.name,
-                code,
-                contactName: data.contactName,
-                email: data.email,
-                phone: data.phone,
-                planName: data.planName || 'Pro Plan',
-                storageUsed: '1.2 GB',
-                status: 'Active',
-            },
-        });
-        // Create the matching login User for the company
+        let company = await database_1.default.company.findFirst({ where: { email: data.email } });
+        if (!company) {
+            company = await database_1.default.company.create({
+                data: {
+                    name: data.name,
+                    code,
+                    contactName: data.contactName,
+                    email: data.email,
+                    phone: data.phone,
+                    planName: data.planName || 'Pro Plan',
+                    storageUsed: '1.2 GB',
+                    status: 'Active',
+                },
+            });
+        }
+        // Create or update the matching login User for the company
         const passwordHash = await bcrypt_1.default.hash(data.password || 'admin123', 12);
         const propertyManagerRole = await database_1.default.role.findFirst({ where: { name: 'Property Manager' } });
         const nameParts = data.contactName.trim().split(/\s+/);
         const firstName = nameParts[0] || 'Admin';
         const lastName = nameParts.slice(1).join(' ') || 'User';
         if (propertyManagerRole) {
-            await database_1.default.user.create({
-                data: {
-                    email: data.email,
-                    passwordHash,
-                    firstName,
-                    lastName,
-                    phone: data.phone,
-                    roleId: propertyManagerRole.id,
-                    companyId: company.id,
-                    status: 'Active',
-                },
-            });
+            const existingUser = await database_1.default.user.findUnique({ where: { email: data.email } });
+            if (existingUser) {
+                await database_1.default.user.update({
+                    where: { id: existingUser.id },
+                    data: {
+                        firstName,
+                        lastName,
+                        passwordHash,
+                        companyId: company.id,
+                        roleId: propertyManagerRole.id,
+                    },
+                });
+            }
+            else {
+                await database_1.default.user.create({
+                    data: {
+                        email: data.email,
+                        passwordHash,
+                        firstName,
+                        lastName,
+                        phone: data.phone,
+                        roleId: propertyManagerRole.id,
+                        companyId: company.id,
+                        status: 'Active',
+                    },
+                });
+            }
         }
         return company;
     }
@@ -106,16 +124,32 @@ class SuperAdminService {
         if (mappedRole === 'Maintenance') {
             mappedRole = 'Maintenance Staff';
         }
-        // 1. Create companyUser record
-        const companyUser = await database_1.default.companyUser.create({
-            data: {
-                companyId: finalCompanyId,
-                name: data.name,
-                email: data.email,
-                role: mappedRole,
-                status: 'Active',
-            },
+        // 1. Create or update companyUser record
+        let companyUser = await database_1.default.companyUser.findUnique({
+            where: { email: data.email },
         });
+        if (companyUser) {
+            companyUser = await database_1.default.companyUser.update({
+                where: { id: companyUser.id },
+                data: {
+                    companyId: finalCompanyId,
+                    name: data.name,
+                    role: mappedRole,
+                    status: 'Active',
+                },
+            });
+        }
+        else {
+            companyUser = await database_1.default.companyUser.create({
+                data: {
+                    companyId: finalCompanyId,
+                    name: data.name,
+                    email: data.email,
+                    role: mappedRole,
+                    status: 'Active',
+                },
+            });
+        }
         // 2. Fetch the corresponding Role record from DB
         const roleObj = await database_1.default.role.findFirst({
             where: { name: mappedRole },
@@ -125,19 +159,37 @@ class SuperAdminService {
             const nameParts = data.name.trim().split(/\s+/);
             const firstName = nameParts[0] || 'Staff';
             const lastName = nameParts.slice(1).join(' ') || 'User';
-            // 3. Create the corresponding login user in users table
-            await database_1.default.user.create({
-                data: {
-                    email: data.email,
-                    passwordHash,
-                    firstName,
-                    lastName,
-                    phone: data.phone || '',
-                    roleId: roleObj.id,
-                    companyId: finalCompanyId,
-                    status: 'Active',
-                },
+            // 3. Create or update login user in users table
+            const existingUser = await database_1.default.user.findUnique({
+                where: { email: data.email },
             });
+            if (existingUser) {
+                await database_1.default.user.update({
+                    where: { id: existingUser.id },
+                    data: {
+                        firstName,
+                        lastName,
+                        passwordHash,
+                        roleId: roleObj.id,
+                        companyId: finalCompanyId,
+                        status: 'Active',
+                    },
+                });
+            }
+            else {
+                await database_1.default.user.create({
+                    data: {
+                        email: data.email,
+                        passwordHash,
+                        firstName,
+                        lastName,
+                        phone: data.phone || '',
+                        roleId: roleObj.id,
+                        companyId: finalCompanyId,
+                        status: 'Active',
+                    },
+                });
+            }
             // Automatically create matching Vendor record if the role is Maintenance Staff
             if (mappedRole === 'Maintenance Staff') {
                 const existingVendor = await database_1.default.vendor.findFirst({
