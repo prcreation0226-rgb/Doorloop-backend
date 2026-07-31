@@ -934,7 +934,17 @@ export class PortalController {
       const companyId = req.user?.companyId;
       const reports = await prisma.screeningReport.findMany({
         where: companyId ? { companyId } : {},
-        include: { tenant: true },
+        include: {
+          tenant: {
+            include: {
+              unit: {
+                include: {
+                  property: true,
+                },
+              },
+            },
+          },
+        },
       });
       return sendSuccess({ res, data: reports });
     } catch (error) {
