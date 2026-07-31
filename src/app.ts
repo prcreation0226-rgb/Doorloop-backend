@@ -14,12 +14,10 @@ const app = express();
 app.use(helmet());
 app.use(
   cors({
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'https://doorloop-software.netlify.app',
-      'https://doorloop-software.netlify.app/',
-    ],
+    origin: (origin, callback) => {
+      // Dynamically allow any origin (e.g. localhost, local IPs like 192.168.x.x, Netlify) to support different Wi-Fis
+      callback(null, true);
+    },
     credentials: true,
   })
 );app.use(express.json({ limit: '10mb' }));
