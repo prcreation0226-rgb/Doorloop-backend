@@ -987,7 +987,7 @@ export class PortalController {
           creditScore: finalCreditScore,
           criminalPass: criminalPass ?? true,
           evictionPass: evictionPass ?? true,
-          status: status || 'Approved',
+          status: status || 'Processing',
           companyId,
         },
       });
