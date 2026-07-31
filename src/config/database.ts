@@ -28,24 +28,26 @@ export const prisma = prismaRaw.$extends({
           'Invoice', 'RentPayment', 'WorkOrder', 'Announcement', 'Violation', 'ServiceRequest'
         ];
 
+        const queryArgs = args as any;
+
         if (modelsWithCompanyId.includes(model)) {
           if (operation !== 'create' && operation !== 'createMany' && operation !== 'createManyAndReturn') {
-            args.where = args.where || {};
-            args.where.companyId = companyId;
+            queryArgs.where = queryArgs.where || {};
+            queryArgs.where.companyId = companyId;
 
             // Extra role isolation checks
             if (role === 'Tenant' && tenantId) {
-              if (model === 'Tenant') args.where.id = tenantId;
-              if (model === 'Lease') args.where.tenantId = tenantId;
-              if (model === 'Invoice') args.where.tenantId = tenantId;
-              if (model === 'TenantDocument') args.where.tenantId = tenantId;
+              if (model === 'Tenant') queryArgs.where.id = tenantId;
+              if (model === 'Lease') queryArgs.where.tenantId = tenantId;
+              if (model === 'Invoice') queryArgs.where.tenantId = tenantId;
+              if (model === 'TenantDocument') queryArgs.where.tenantId = tenantId;
             } else if (role === 'Owner' && ownerId) {
-              if (model === 'Owner') args.where.id = ownerId;
-              if (model === 'Property') args.where.ownerId = ownerId;
-              if (model === 'OwnerDocument') args.where.ownerId = ownerId;
+              if (model === 'Owner') queryArgs.where.id = ownerId;
+              if (model === 'Property') queryArgs.where.ownerId = ownerId;
+              if (model === 'OwnerDocument') queryArgs.where.ownerId = ownerId;
             } else if (role === 'Maintenance Staff' && staffId) {
-              if (model === 'WorkOrder') args.where.staffId = staffId;
-              if (model === 'StaffProfile') args.where.id = staffId;
+              if (model === 'WorkOrder') queryArgs.where.staffId = staffId;
+              if (model === 'StaffProfile') queryArgs.where.id = staffId;
             }
           }
         }
@@ -58,16 +60,16 @@ export const prisma = prismaRaw.$extends({
             }
           };
 
-          if (args.data) {
-            if (Array.isArray(args.data)) {
-              args.data.forEach(injectCompanyId);
+          if (queryArgs.data) {
+            if (Array.isArray(queryArgs.data)) {
+              queryArgs.data.forEach(injectCompanyId);
             } else {
-              injectCompanyId(args.data);
+              injectCompanyId(queryArgs.data);
             }
           }
         }
 
-        return query(args);
+        return query(queryArgs);
       }
     }
   }
