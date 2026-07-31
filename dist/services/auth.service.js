@@ -14,18 +14,6 @@ class AuthService {
             where: { email },
             include: { role: true, company: true },
         });
-        // Fallback search for demo portal email aliases (e.g. admin@apexpm.com, admin@apex.com, manager@apexpm.com)
-        if (!user) {
-            user = await database_1.default.user.findFirst({
-                where: {
-                    OR: [
-                        { email: 'admin@apex.com' },
-                        { email: 'admin@apexpm.com' },
-                    ],
-                },
-                include: { role: true, company: true },
-            });
-        }
         if (!user) {
             throw new appError_1.AppError('Invalid credentials provided.', 401, 'INVALID_CREDENTIALS');
         }

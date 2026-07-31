@@ -16,12 +16,10 @@ const app = (0, express_1.default)();
 // --- Core Hardening & Request Middlewares ---
 app.use((0, helmet_1.default)());
 app.use((0, cors_1.default)({
-    origin: [
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'https://doorloop-software.netlify.app',
-        'https://doorloop-software.netlify.app/',
-    ],
+    origin: (origin, callback) => {
+        // Echo back the requesting origin dynamically to support credentials across all IPs and Wi-Fis
+        callback(null, origin || 'http://localhost:5173');
+    },
     credentials: true,
 }));
 app.use(express_1.default.json({ limit: '10mb' }));

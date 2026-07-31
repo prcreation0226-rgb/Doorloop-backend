@@ -17,12 +17,20 @@ class PortalController {
             include: {
                 unit: {
                     include: {
-                        property: true,
+                        property: {
+                            include: {
+                                owner: true,
+                            },
+                        },
                     },
                 },
                 leases: {
                     include: {
-                        property: true,
+                        property: {
+                            include: {
+                                owner: true,
+                            },
+                        },
                         unit: true,
                     },
                     orderBy: { startDate: 'desc' },
@@ -40,7 +48,11 @@ class PortalController {
             const leases = await database_1.default.lease.findMany({
                 where: { tenantId: tenant.id },
                 include: {
-                    property: true,
+                    property: {
+                        include: {
+                            owner: true,
+                        },
+                    },
                     unit: true,
                     tenant: true,
                 },
@@ -70,6 +82,16 @@ class PortalController {
                     leaseEnd: lease.endDate ? new Date(lease.endDate).toISOString().split('T')[0] : '',
                     status: lease.status || 'Active',
                     tenantName: `${tenant.firstName} ${tenant.lastName}`,
+                    property: lease.property,
+                    unit: lease.unit,
+                    tenant: {
+                        id: tenant.id,
+                        firstName: tenant.firstName,
+                        lastName: tenant.lastName,
+                        email: tenant.email,
+                        phone: tenant.phone,
+                        status: tenant.status,
+                    },
                 },
             });
         }

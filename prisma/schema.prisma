@@ -360,7 +360,7 @@ model AuditLog {
   status    String   @default("Success")
   user      User?    @relation(fields: [userId], references: [id])
 
-  @@index([userId], map: "audit_logs_userId_fkey")
+  @@index([userId], map: "audit_logs_userId_idx")
   @@map("audit_logs")
 }
 
@@ -674,6 +674,8 @@ model Company {
   vendors             Vendor[]
   violations          Violation[]
   workOrders          WorkOrder[]
+  ownerDocuments      OwnerDocument[]
+  tenantDocuments     TenantDocument[]
 
   @@map("companies")
 }
@@ -739,7 +741,9 @@ model OwnerDocument {
   companyId  String?
   ownerId    String?
   propertyId String?
+  company    Company? @relation(fields: [companyId], references: [id])
 
+  @@index([companyId], map: "owner_documents_companyId_fkey")
   @@map("owner_documents")
 }
 
@@ -766,7 +770,9 @@ model TenantDocument {
   propertyId String?
   tenantId   String?
   unitId     String?
+  company    Company? @relation(fields: [companyId], references: [id])
 
+  @@index([companyId], map: "tenant_documents_companyId_fkey")
   @@map("tenant_documents")
 }
 
