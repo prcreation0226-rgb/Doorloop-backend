@@ -827,7 +827,9 @@ class PortalController {
     }
     async getCrmLeads(req, res, next) {
         try {
+            const companyId = req.user?.companyId;
             const leads = await database_1.default.crmLead.findMany({
+                where: companyId ? { companyId } : {},
                 orderBy: { createdAt: 'desc' },
             });
             return (0, apiResponse_1.sendSuccess)({ res, data: leads });
@@ -839,6 +841,7 @@ class PortalController {
     async createCrmLead(req, res, next) {
         try {
             const { id, name, firstName, lastName, email, phone, source, budget, moveInDate, priority, assignedAgent, notes, property, companyId, status } = req.body;
+            const userCompanyId = req.user?.companyId;
             if (id) {
                 const existing = await database_1.default.crmLead.findUnique({
                     where: { id },
@@ -858,7 +861,7 @@ class PortalController {
                             assignedAgent: assignedAgent !== undefined ? assignedAgent : undefined,
                             notes: notes !== undefined ? notes : undefined,
                             property: property !== undefined ? property : undefined,
-                            companyId: companyId !== undefined ? companyId : undefined,
+                            companyId: companyId || userCompanyId || undefined,
                         },
                     });
                     return (0, apiResponse_1.sendSuccess)({ res, data: lead });
@@ -879,7 +882,7 @@ class PortalController {
                     assignedAgent: assignedAgent || null,
                     notes: notes || null,
                     property: property || null,
-                    companyId: companyId || null,
+                    companyId: companyId || userCompanyId || null,
                 },
             });
             return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: lead });

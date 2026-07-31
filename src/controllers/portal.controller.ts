@@ -888,7 +888,9 @@ export class PortalController {
 
   async getCrmLeads(req: Request, res: Response, next: NextFunction) {
     try {
+      const companyId = (req as AuthenticatedRequest).user?.companyId;
       const leads = await prisma.crmLead.findMany({
+        where: companyId ? { companyId } : {},
         orderBy: { createdAt: 'desc' },
       });
       return sendSuccess({ res, data: leads });
@@ -900,6 +902,7 @@ export class PortalController {
   async createCrmLead(req: Request, res: Response, next: NextFunction) {
     try {
       const { id, name, firstName, lastName, email, phone, source, budget, moveInDate, priority, assignedAgent, notes, property, companyId, status } = req.body;
+      const userCompanyId = (req as AuthenticatedRequest).user?.companyId;
 
       if (id) {
         const existing = await prisma.crmLead.findUnique({
@@ -920,7 +923,7 @@ export class PortalController {
               assignedAgent: assignedAgent !== undefined ? assignedAgent : undefined,
               notes: notes !== undefined ? notes : undefined,
               property: property !== undefined ? property : undefined,
-              companyId: companyId !== undefined ? companyId : undefined,
+              companyId: companyId || userCompanyId || undefined,
             },
           });
           return sendSuccess({ res, data: lead });
@@ -942,7 +945,7 @@ export class PortalController {
           assignedAgent: assignedAgent || null,
           notes: notes || null,
           property: property || null,
-          companyId: companyId || null,
+          companyId: companyId || userCompanyId || null,
         },
       });
       return sendSuccess({ res, statusCode: 201, data: lead });

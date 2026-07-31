@@ -26,7 +26,8 @@ export const prisma = prismaRaw.$extends({
         const modelsWithCompanyId = [
           'Property', 'Owner', 'Tenant', 'StaffProfile', 'User', 
           'Document', 'OwnerDocument', 'TenantDocument', 'Lease',
-          'Invoice', 'RentPayment', 'WorkOrder', 'Announcement', 'Violation', 'ServiceRequest'
+          'Invoice', 'RentPayment', 'WorkOrder', 'Announcement', 'Violation', 'ServiceRequest',
+          'CrmLead'
         ];
 
         const queryArgs = args as any;
