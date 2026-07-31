@@ -10,18 +10,7 @@ export class AuthService {
       include: { role: true, company: true },
     });
 
-    // Fallback search for demo portal email aliases (e.g. admin@apexpm.com, admin@apex.com, manager@apexpm.com)
-    if (!user) {
-      user = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { email: 'admin@apex.com' },
-            { email: 'admin@apexpm.com' },
-          ],
-        },
-        include: { role: true, company: true },
-      });
-    }
+
 
     if (!user) {
       throw new AppError('Invalid credentials provided.', 401, 'INVALID_CREDENTIALS');
