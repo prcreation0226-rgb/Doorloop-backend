@@ -6,124 +6,76 @@ const tenantContext_js_1 = require("../utils/tenantContext.js");
 const prismaRaw = new client_1.PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
 });
-const modelsWithCompanyId = new Set([
-    'User', 'Owner', 'Property', 'Building', 'Unit', 'Tenant', 'Lease', 'RentPayment', 'Violation',
-    'MoveIn', 'MoveOut', 'WorkOrder', 'StaffProfile', 'AuditLog', 'Invoice', 'Charge', 'Deposit',
-    'InsurancePolicy', 'PaymentPlan', 'ScreeningReport', 'Announcement', 'Promotion', 'Notification',
-    'Document', 'InspectionTemplate', 'Inspection', 'InspectionRoom', 'InspectionItem'
-]);
 exports.prisma = prismaRaw.$extends({
     query: {
         $allModels: {
             async $allOperations({ model, operation, args, query }) {
-                const context = tenantContext_js_1.tenantContext.getStore();
-                if (!context) {
+                const store = tenantContext_js_1.tenantContext.getStore();
+                if (!store || !store.companyId) {
                     return query(args);
                 }
-                const { companyId, role, tenantId, ownerId, staffId } = context;
-                // Super Admin bypasses company filtering
+                const { companyId, role, tenantId, ownerId, staffId } = store;
+                // Super Admin has bypass
                 if (role === 'Super Admin') {
                     return query(args);
                 }
-                const updatedArgs = (args || {});
-                updatedArgs.where = updatedArgs.where || {};
-                // 1. Pre-verify single-record queries to avoid Prisma unique where clause constraints
-                if (['findUnique', 'update', 'delete', 'upsert'].includes(operation)) {
-                    if (companyId && modelsWithCompanyId.has(model)) {
-                        const exists = await prismaRaw[model.toLowerCase()].findFirst({
-                            where: { ...updatedArgs.where, companyId },
-                        });
-                        if (!exists) {
-                            if (operation === 'findUnique') {
-                                return null;
-                            }
-                            throw new Error(`Record not found or access denied for model ${model}`);
+                // Apply filters only for models that have companyId
+                const modelsWithCompanyId = [
+                    'Property', 'Owner', 'Tenant', 'StaffProfile', 'User',
+                    'Document', 'OwnerDocument', 'TenantDocument', 'Lease', 'Unit', 'Building',
+                    'Invoice', 'RentPayment', 'WorkOrder', 'Announcement', 'Violation', 'ServiceRequest'
+                ];
+                const queryArgs = args;
+                if (modelsWithCompanyId.includes(model)) {
+                    if (operation !== 'create' && operation !== 'createMany' && operation !== 'createManyAndReturn') {
+                        queryArgs.where = queryArgs.where || {};
+                        queryArgs.where.companyId = companyId;
+                        // Extra role isolation checks
+                        if (role === 'Tenant' && tenantId) {
+                            if (model === 'Tenant')
+                                queryArgs.where.id = tenantId;
+                            if (model === 'Lease')
+                                queryArgs.where.tenantId = tenantId;
+                            if (model === 'Invoice')
+                                queryArgs.where.tenantId = tenantId;
+                            if (model === 'TenantDocument')
+                                queryArgs.where.tenantId = tenantId;
+                        }
+                        else if (role === 'Owner' && ownerId) {
+                            if (model === 'Owner')
+                                queryArgs.where.id = ownerId;
+                            if (model === 'Property')
+                                queryArgs.where.ownerId = ownerId;
+                            if (model === 'OwnerDocument')
+                                queryArgs.where.ownerId = ownerId;
+                        }
+                        else if (role === 'Maintenance Staff' && staffId) {
+                            if (model === 'WorkOrder')
+                                queryArgs.where.staffId = staffId;
+                            if (model === 'StaffProfile')
+                                queryArgs.where.id = staffId;
                         }
                     }
                 }
-                // 2. Enforce Company ID isolation for general queries
-                if (companyId && modelsWithCompanyId.has(model)) {
-                    updatedArgs.where.companyId = companyId;
-                }
-                // 3. Enforce Role-based isolation
-                const roleLower = (role || '').toLowerCase();
-                if (roleLower.includes('tenant') || roleLower.includes('resident')) {
-                    if (tenantId) {
-                        if (model === 'Tenant') {
-                            updatedArgs.where.id = tenantId;
+                // Automatically assign companyId on create
+                if (operation === 'create' || operation === 'createMany') {
+                    const injectCompanyId = (data) => {
+                        if (data && typeof data === 'object') {
+                            data.companyId = companyId;
                         }
-                        else if (model === 'Lease') {
-                            updatedArgs.where.tenantId = tenantId;
+                    };
+                    if (queryArgs.data) {
+                        if (Array.isArray(queryArgs.data)) {
+                            queryArgs.data.forEach(injectCompanyId);
                         }
-                        else if (model === 'Invoice') {
-                            updatedArgs.where.tenantId = tenantId;
-                        }
-                        else if (model === 'RentPayment') {
-                            updatedArgs.where.lease = { tenantId };
-                        }
-                        else if (model === 'Document') {
-                            updatedArgs.where.tenantId = tenantId;
-                        }
-                        else if (model === 'WorkOrder') {
-                            updatedArgs.where.tenantId = tenantId;
+                        else {
+                            injectCompanyId(queryArgs.data);
                         }
                     }
                 }
-                else if (roleLower.includes('owner') || roleLower.includes('landlord')) {
-                    if (ownerId) {
-                        if (model === 'Owner') {
-                            updatedArgs.where.id = ownerId;
-                        }
-                        else if (model === 'Property') {
-                            updatedArgs.where.ownerId = ownerId;
-                        }
-                        else if (model === 'Building') {
-                            updatedArgs.where.property = { ownerId };
-                        }
-                        else if (model === 'Unit') {
-                            updatedArgs.where.property = { ownerId };
-                        }
-                        else if (model === 'Invoice') {
-                            updatedArgs.where.property = { ownerId };
-                        }
-                        else if (model === 'Document') {
-                            updatedArgs.where.ownerId = ownerId;
-                        }
-                        else if (model === 'WorkOrder') {
-                            updatedArgs.where.property = { ownerId };
-                        }
-                    }
-                }
-                else if (roleLower.includes('maintenance') || roleLower.includes('staff')) {
-                    if (staffId) {
-                        if (model === 'WorkOrder') {
-                            updatedArgs.where.assignedStaffId = staffId;
-                        }
-                    }
-                }
-                // 4. Auto-inject companyId on create operations
-                if (companyId && (operation === 'create' || operation === 'createMany')) {
-                    if (modelsWithCompanyId.has(model)) {
-                        if (operation === 'create') {
-                            updatedArgs.data = updatedArgs.data || {};
-                            updatedArgs.data.companyId = companyId;
-                        }
-                        else if (operation === 'createMany') {
-                            if (Array.isArray(updatedArgs.data)) {
-                                updatedArgs.data = updatedArgs.data.map((item) => ({
-                                    ...item,
-                                    companyId,
-                                }));
-                            }
-                            else if (updatedArgs.data) {
-                                updatedArgs.data.companyId = companyId;
-                            }
-                        }
-                    }
-                }
-                return query(updatedArgs);
-            },
-        },
-    },
+                return query(queryArgs);
+            }
+        }
+    }
 });
 exports.default = exports.prisma;

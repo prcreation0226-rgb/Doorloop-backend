@@ -31,7 +31,7 @@ export const prisma = prismaRaw.$extends({
         const queryArgs = args as any;
 
         if (modelsWithCompanyId.includes(model)) {
-          if (operation !== 'create' && operation !== 'createMany' && operation !== 'createManyAndReturn') {
+          if (operation !== 'create' && operation !== 'createMany' && (operation as string) !== 'createManyAndReturn') {
             queryArgs.where = queryArgs.where || {};
             queryArgs.where.companyId = companyId;
 
