@@ -22,6 +22,7 @@ class TenantController {
                             property: true,
                         },
                     },
+                    screeningReports: true,
                 },
             });
             return (0, apiResponse_js_1.sendSuccess)({ res, data: tenants });

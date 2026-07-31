@@ -19,6 +19,7 @@ export class TenantController {
               property: true,
             },
           },
+          screeningReports: true,
         },
       });
       return sendSuccess({ res, data: tenants });

@@ -1,20 +1,19 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const database_1 = __importDefault(require("../config/database"));
 async function main() {
-    const properties = await prisma.property.findMany();
-    console.log('Properties count:', properties.length);
-    console.log('Properties:', properties.map(p => ({ id: p.id, name: p.name, companyId: p.companyId })));
-    const units = await prisma.unit.count();
-    console.log('Units count:', units);
-    const workOrders = await prisma.workOrder.count();
-    console.log('WorkOrders count:', workOrders);
-    const leases = await prisma.lease.count();
-    console.log('Leases count:', leases);
-    const companies = await prisma.company.findMany();
-    console.log('Companies:', companies.map(c => ({ id: c.id, name: c.name })));
+    console.log('--- DB STATE CHECK ---');
+    const companies = await database_1.default.company.findMany();
+    console.log('\nCOMPANIES in DB:');
+    companies.forEach(c => console.log(`- ID: ${c.id} | Name: ${c.name}`));
+    const users = await database_1.default.user.findMany({ include: { role: true } });
+    console.log('\nUSERS in DB:');
+    users.forEach(u => console.log(`- Email: ${u.email} | Name: ${u.firstName} ${u.lastName} | CompanyId: ${u.companyId} | Role: ${u.role?.name}`));
+    const properties = await database_1.default.property.findMany();
+    console.log('\nPROPERTIES in DB:');
+    properties.forEach(p => console.log(`- ID: ${p.id} | Name: ${p.name} | CompanyId: ${p.companyId}`));
 }
-main()
-    .catch(console.error)
-    .finally(() => prisma.$disconnect());
+main().catch(console.error).finally(() => database_1.default.$disconnect());
