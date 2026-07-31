@@ -24,7 +24,7 @@ export const prisma = prismaRaw.$extends({
         // Apply filters only for models that have companyId
         const modelsWithCompanyId = [
           'Property', 'Owner', 'Tenant', 'StaffProfile', 'User', 
-          'Document', 'OwnerDocument', 'TenantDocument', 'Lease', 'Unit', 'Building',
+          'Document', 'OwnerDocument', 'TenantDocument', 'Lease',
           'Invoice', 'RentPayment', 'WorkOrder', 'Announcement', 'Violation', 'ServiceRequest'
         ];
 

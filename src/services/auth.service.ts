@@ -16,6 +16,10 @@ export class AuthService {
       throw new AppError('Invalid credentials provided.', 401, 'INVALID_CREDENTIALS');
     }
 
+    if (user.status !== 'Active') {
+      throw new AppError('Your account has been deactivated. Please contact support.', 403, 'USER_DEACTIVATED');
+    }
+
     if (user.companyId && user.company) {
       if (user.company.status !== 'Active') {
         throw new AppError('Your company account is suspended. Please contact support.', 403, 'COMPANY_SUSPENDED');
