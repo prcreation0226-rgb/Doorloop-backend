@@ -173,6 +173,47 @@ export class InspectionService {
       }
       if (data.status) updateData.status = data.status;
 
+      if (data.templateId && data.templateId !== inspection.templateId) {
+        const template = await tx.inspectionTemplate.findFirst({
+          where: { id: data.templateId, ...(companyId ? { companyId } : {}) },
+          include: {
+            rooms: {
+              include: { items: true },
+            },
+          },
+        });
+        if (template) {
+          updateData.templateId = template.id;
+          updateData.templateName = template.name;
+          
+          // Clean existing checklist rooms & items (database cascade handles items)
+          await tx.inspectionRoom.deleteMany({ where: { inspectionId: id } });
+
+          // Populate new rooms & items from selected template
+          if (template.rooms && template.rooms.length > 0) {
+            for (const roomTemp of template.rooms) {
+              await tx.inspectionRoom.create({
+                data: {
+                  inspectionId: id,
+                  name: roomTemp.name,
+                  sortOrder: roomTemp.sortOrder,
+                  items: roomTemp.items && roomTemp.items.length > 0
+                    ? {
+                        create: roomTemp.items.map((itemTemp: any) => ({
+                          label: itemTemp.label,
+                          required: itemTemp.required,
+                          sortOrder: itemTemp.sortOrder,
+                          completed: false,
+                        })),
+                      }
+                    : undefined,
+                },
+              });
+            }
+          }
+        }
+      }
+
       await tx.inspection.update({
         where: { id },
         data: updateData,
