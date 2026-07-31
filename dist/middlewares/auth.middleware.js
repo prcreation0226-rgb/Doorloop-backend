@@ -14,9 +14,15 @@ async function authMiddleware(req, res, next) {
         return next(new appError_js_1.AppError('Authentication required. Missing Bearer token.', 401, 'UNAUTHORIZED'));
     }
     const token = authHeader.split(' ')[1];
+    let payload;
     try {
-        const payload = (0, jwt_js_1.verifyAccessToken)(token);
+        payload = (0, jwt_js_1.verifyAccessToken)(token);
         req.user = payload;
+    }
+    catch (error) {
+        return next(new appError_js_1.AppError('Invalid or expired access token.', 401, 'TOKEN_EXPIRED'));
+    }
+    try {
         const userRole = payload.roleName;
         let tenantId;
         let ownerId;
@@ -46,6 +52,6 @@ async function authMiddleware(req, res, next) {
         });
     }
     catch (error) {
-        return next(new appError_js_1.AppError('Invalid or expired access token.', 401, 'TOKEN_EXPIRED'));
+        return next(error);
     }
 }

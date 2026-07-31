@@ -17,10 +17,15 @@ export async function authMiddleware(req: AuthenticatedRequest, res: Response, n
 
   const token = authHeader.split(' ')[1];
 
+  let payload: TokenPayload;
   try {
-    const payload = verifyAccessToken(token);
+    payload = verifyAccessToken(token);
     req.user = payload;
+  } catch (error) {
+    return next(new AppError('Invalid or expired access token.', 401, 'TOKEN_EXPIRED'));
+  }
 
+  try {
     const userRole = payload.roleName;
     let tenantId: string | undefined;
     let ownerId: string | undefined;
@@ -49,6 +54,6 @@ export async function authMiddleware(req: AuthenticatedRequest, res: Response, n
       next();
     });
   } catch (error) {
-    return next(new AppError('Invalid or expired access token.', 401, 'TOKEN_EXPIRED'));
+    return next(error);
   }
 }

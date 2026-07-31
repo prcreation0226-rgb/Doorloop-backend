@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import prisma from '../config/database';
 import { sendSuccess } from '../utils/apiResponse';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
+import { AppError } from '../utils/appError';
 
 export class UnitController {
   async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -82,6 +83,13 @@ export class UnitController {
         });
         if (!existingBuilding) {
           finalBuildingId = undefined;
+        } else if (existingBuilding.unitsCount > 0) {
+          const currentUnitsCount = await prisma.unit.count({
+            where: { buildingId: finalBuildingId },
+          });
+          if (currentUnitsCount >= existingBuilding.unitsCount) {
+            throw new AppError(`Cannot add unit. This building is restricted to a maximum of ${existingBuilding.unitsCount} units.`, 400, 'BUILDING_CAPACITY_REACHED');
+          }
         }
       }
 
@@ -100,6 +108,15 @@ export class UnitController {
           });
         }
         finalBuildingId = building.id;
+
+        if (building.unitsCount > 0) {
+          const currentUnitsCount = await prisma.unit.count({
+            where: { buildingId: finalBuildingId },
+          });
+          if (currentUnitsCount >= building.unitsCount) {
+            throw new AppError(`Cannot add unit. The building has reached its maximum capacity of ${building.unitsCount} units.`, 400, 'BUILDING_CAPACITY_REACHED');
+          }
+        }
       }
 
       const unit = await prisma.unit.create({

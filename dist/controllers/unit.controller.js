@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.unitController = exports.UnitController = void 0;
 const database_1 = __importDefault(require("../config/database"));
 const apiResponse_1 = require("../utils/apiResponse");
+const appError_1 = require("../utils/appError");
 class UnitController {
     async getAll(req, res, next) {
         try {
@@ -72,6 +73,14 @@ class UnitController {
                 if (!existingBuilding) {
                     finalBuildingId = undefined;
                 }
+                else if (existingBuilding.unitsCount > 0) {
+                    const currentUnitsCount = await database_1.default.unit.count({
+                        where: { buildingId: finalBuildingId },
+                    });
+                    if (currentUnitsCount >= existingBuilding.unitsCount) {
+                        throw new appError_1.AppError(`Cannot add unit. This building is restricted to a maximum of ${existingBuilding.unitsCount} units.`, 400, 'BUILDING_CAPACITY_REACHED');
+                    }
+                }
             }
             if (!finalBuildingId) {
                 let building = await database_1.default.building.findFirst({
@@ -88,6 +97,14 @@ class UnitController {
                     });
                 }
                 finalBuildingId = building.id;
+                if (building.unitsCount > 0) {
+                    const currentUnitsCount = await database_1.default.unit.count({
+                        where: { buildingId: finalBuildingId },
+                    });
+                    if (currentUnitsCount >= building.unitsCount) {
+                        throw new appError_1.AppError(`Cannot add unit. The building has reached its maximum capacity of ${building.unitsCount} units.`, 400, 'BUILDING_CAPACITY_REACHED');
+                    }
+                }
             }
             const unit = await database_1.default.unit.create({
                 data: {
