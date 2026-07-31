@@ -871,7 +871,17 @@ class PortalController {
             const companyId = req.user?.companyId;
             const reports = await database_1.default.screeningReport.findMany({
                 where: companyId ? { companyId } : {},
-                include: { tenant: true },
+                include: {
+                    tenant: {
+                        include: {
+                            unit: {
+                                include: {
+                                    property: true,
+                                },
+                            },
+                        },
+                    },
+                },
             });
             return (0, apiResponse_1.sendSuccess)({ res, data: reports });
         }
@@ -919,7 +929,7 @@ class PortalController {
                     creditScore: finalCreditScore,
                     criminalPass: criminalPass ?? true,
                     evictionPass: evictionPass ?? true,
-                    status: status || 'Approved',
+                    status: status || 'Processing',
                     companyId,
                 },
             });
