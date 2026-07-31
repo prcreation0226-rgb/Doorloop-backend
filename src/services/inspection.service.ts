@@ -148,9 +148,10 @@ export class InspectionService {
     if (!inspection) throw new Error('Inspection not found');
     if (inspection.status === 'COMPLETED') throw new Error('Cannot edit a completed inspection');
 
-    return prisma.$transaction(async (tx) => {
-      // Update basic fields
-      const updateData: any = {};
+    return prisma.$transaction(
+      async (tx) => {
+        // Update basic fields
+        const updateData: any = {};
       if (data.overallNotes !== undefined) updateData.overallNotes = data.overallNotes;
       if (data.managerNotes !== undefined) updateData.managerNotes = data.managerNotes;
       if (data.assignedInspectorId !== undefined) {
@@ -265,6 +266,9 @@ export class InspectionService {
           },
         },
       });
+    }, {
+      maxWait: 10000,
+      timeout: 30000
     });
   }
 
