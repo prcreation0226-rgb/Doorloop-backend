@@ -6,6 +6,7 @@ import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 export class PropertyController {
   async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      console.log('DEBUG properties: req.user =', req.user);
       const companyId = req.user?.companyId;
       const properties = await propertyService.getAllProperties(companyId, req.user);
       return sendSuccess({ res, data: properties });

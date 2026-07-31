@@ -11,6 +11,7 @@ exports.prisma = prismaRaw.$extends({
         $allModels: {
             async $allOperations({ model, operation, args, query }) {
                 const store = tenantContext_js_1.tenantContext.getStore();
+                console.log('DEBUG database.ts: store =', store, 'model =', model);
                 if (!store || !store.companyId) {
                     return query(args);
                 }
