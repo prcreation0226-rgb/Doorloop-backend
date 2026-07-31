@@ -54,7 +54,7 @@ export const prisma = prismaRaw.$extends({
         }
 
         // Automatically assign companyId on create
-        if (operation === 'create' || operation === 'createMany') {
+        if ((operation === 'create' || operation === 'createMany') && modelsWithCompanyId.includes(model)) {
           const injectCompanyId = (data: any) => {
             if (data && typeof data === 'object') {
               data.companyId = companyId;
