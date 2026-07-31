@@ -1179,12 +1179,14 @@ enum InspectionTemplateType {
   MOVE_IN
   MOVE_OUT
   ROUTINE
+  INSPECTION_ASSIGN
 }
 
 enum InspectionType {
   MOVE_IN
   MOVE_OUT
   ROUTINE
+  INSPECTION_ASSIGN
 }
 
 enum MoveOutStatus {
