@@ -15,8 +15,8 @@ app.use(helmet());
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Dynamically allow any origin (e.g. localhost, local IPs like 192.168.x.x, Netlify) to support different Wi-Fis
-      callback(null, true);
+      // Echo back the requesting origin dynamically to support credentials across all IPs and Wi-Fis
+      callback(null, origin || 'http://localhost:5173');
     },
     credentials: true,
   })
