@@ -1221,3 +1221,20 @@ enum work_orders_status {
   Cancelled
   Closed
 }
+
+model ReportExport {
+  id           String   @id @default(uuid())
+  companyId    String?
+  userId       String?
+  reportType   String
+  filters      String?  @db.Text
+  fileName     String
+  fileType     String   @default("XLSX")
+  status       String   @default("Pending")
+  fileUrl      String?  @db.Text
+  errorMessage String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("report_exports")
+}
