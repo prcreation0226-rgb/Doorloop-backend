@@ -23,7 +23,6 @@ import inspectionTemplateRoutes from './inspectionTemplate.routes';
 import inspectionRoutes from './inspection.routes';
 import documentRoutes from './document.routes';
 import reportRoutes from '../reports/routes/report.routes';
-import roleRoutes from './role.routes';
 import { authMiddleware } from '../middlewares/auth.middleware';
 
 const router = Router();
@@ -59,7 +58,6 @@ router.use('/inspection-templates', authMiddleware, inspectionTemplateRoutes);
 router.use('/inspections', authMiddleware, inspectionRoutes);
 router.use('/documents', authMiddleware, documentRoutes);
 router.use('/reports', authMiddleware, reportRoutes);
-router.use('/roles', authMiddleware, roleRoutes);
 router.use('/', authMiddleware, secondaryRoutes);
 
 export default router;
