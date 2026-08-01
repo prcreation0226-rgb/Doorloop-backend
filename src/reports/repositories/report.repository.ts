@@ -18,21 +18,28 @@ export class ReportRepository {
     // Filter by allowed properties
     const activePropertyIds = propertyId ? [propertyId] : propertyIds;
 
-    const whereClause: any = {
-      companyId,
-      propertyId: { in: activePropertyIds },
-    };
+    const whereClause: any = {};
+    if (activePropertyIds.length > 0) {
+      whereClause.propertyId = { in: activePropertyIds };
+    }
+    if (companyId) {
+      whereClause.OR = [{ companyId }, { companyId: null }];
+    }
 
     if (leaseStatus) {
       whereClause.status = leaseStatus;
     }
 
     if (search) {
-      whereClause.OR = [
-        { tenant: { firstName: { contains: search } } },
-        { tenant: { lastName: { contains: search } } },
-        { property: { name: { contains: search } } },
-        { unit: { unitNumber: { contains: search } } },
+      whereClause.AND = [
+        {
+          OR: [
+            { tenant: { firstName: { contains: search } } },
+            { tenant: { lastName: { contains: search } } },
+            { property: { name: { contains: search } } },
+            { unit: { unitNumber: { contains: search } } },
+          ],
+        },
       ];
     }
 
@@ -73,10 +80,13 @@ export class ReportRepository {
     const { companyId, propertyIds, propertyId, page, limit } = params;
     const activePropertyIds = propertyId ? [propertyId] : propertyIds;
 
-    const whereClause: any = {
-      companyId,
-      id: { in: activePropertyIds },
-    };
+    const whereClause: any = {};
+    if (activePropertyIds.length > 0) {
+      whereClause.id = { in: activePropertyIds };
+    }
+    if (companyId) {
+      whereClause.OR = [{ companyId }, { companyId: null }];
+    }
 
     const skip = (page - 1) * limit;
 
@@ -114,13 +124,13 @@ export class ReportRepository {
     const { companyId, propertyIds, propertyId, tenantId, status, page, limit, sortBy, sortOrder = 'desc' } = params;
     const activePropertyIds = propertyId ? [propertyId] : propertyIds;
 
-    // We fetch unpaid or partially paid invoices that are past due
-    const whereClause: any = {
-      companyId,
-      propertyId: { in: activePropertyIds },
-      balance: { gt: 0 },
-      dueDate: { lt: new Date() },
-    };
+    const whereClause: any = {};
+    if (activePropertyIds.length > 0) {
+      whereClause.propertyId = { in: activePropertyIds };
+    }
+    if (companyId) {
+      whereClause.OR = [{ companyId }, { companyId: null }];
+    }
 
     if (tenantId) {
       whereClause.tenantId = tenantId;
@@ -163,20 +173,10 @@ export class ReportRepository {
     const { companyId, propertyIds, propertyId, startDate, endDate } = params;
     const activePropertyIds = propertyId ? [propertyId] : propertyIds;
 
-    const whereClause: any = {
-      journalEntry: {
-        companyId,
-      },
-    };
+    const whereClause: any = {};
 
     if (activePropertyIds.length > 0) {
       whereClause.propertyId = { in: activePropertyIds };
-    }
-
-    if (startDate || endDate) {
-      whereClause.journalEntry.date = {};
-      if (startDate) whereClause.journalEntry.date.gte = startDate;
-      if (endDate) whereClause.journalEntry.date.lte = endDate;
     }
 
     // Retrieve general ledger lines aggregated by account
@@ -206,10 +206,13 @@ export class ReportRepository {
     const { companyId, propertyIds, propertyId, status, priority, page, limit, sortBy, sortOrder = 'desc' } = params;
     const activePropertyIds = propertyId ? [propertyId] : propertyIds;
 
-    const whereClause: any = {
-      companyId,
-      propertyId: { in: activePropertyIds },
-    };
+    const whereClause: any = {};
+    if (activePropertyIds.length > 0) {
+      whereClause.propertyId = { in: activePropertyIds };
+    }
+    if (companyId) {
+      whereClause.OR = [{ companyId }, { companyId: null }];
+    }
 
     if (status) {
       whereClause.status = status;
@@ -274,10 +277,13 @@ export class ReportRepository {
 
     const activePropertyIds = propertyId ? [propertyId] : propertyIds;
 
-    const whereClause: any = {
-      companyId,
-      propertyId: { in: activePropertyIds },
-    };
+    const whereClause: any = {};
+    if (activePropertyIds.length > 0) {
+      whereClause.propertyId = { in: activePropertyIds };
+    }
+    if (companyId) {
+      whereClause.OR = [{ companyId }, { companyId: null }];
+    }
 
     if (tenantId) {
       whereClause.tenantId = tenantId;
