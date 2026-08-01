@@ -21,47 +21,55 @@ export class WorkOrderController {
         orderBy: { createdAt: 'desc' },
       });
 
-      const formattedWorkOrders = workOrders.map((wo: any, index: number) => ({
-        id: wo.id,
-        workOrderNumber: `WO-${1001 + index}`,
-        propertyId: wo.propertyId,
-        propertyName: wo.property?.name || 'Property',
-        unitNumber: 'Unit 101',
-        vendorId: wo.vendorId || '',
-        vendorName: wo.vendor?.companyName || 'Unassigned',
-        assignedTechnician: wo.vendor?.contactName || 'Unassigned',
-        scheduledDate: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        priority: wo.priority || 'Normal',
-        status: wo.status === 'Open' || wo.status === 'Submitted' ? 'Open' : wo.status === 'InProgress' || wo.status === 'In Progress' ? 'In Progress' : wo.status === 'Completed' ? 'Completed' : wo.status === 'Cancelled' ? 'Cancelled' : wo.status || 'Open',
-        estimatedCost: wo.estimatedCost || 0,
-        actualCost: wo.actualCost || 0,
-        title: wo.title,
-        description: wo.description,
-        createdAt: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        rejectReason: wo.rejectReason || null,
-        resolutionNotes: wo.resolutionNotes || null,
-      }));
+      const formattedWorkOrders = workOrders.map((wo: any, index: number) => {
+        const est = Number(wo.estimatedCost || 0);
+        const act = Number(wo.actualCost || wo.cost || est);
+        return {
+          id: wo.id,
+          workOrderNumber: `WO-${1001 + index}`,
+          propertyId: wo.propertyId,
+          propertyName: wo.property?.name || wo.propertyName || 'Property',
+          unitNumber: wo.unitNumber || (wo.property?.units?.length ? `Unit ${wo.property.units[0].unitNumber}` : 'Unit 101'),
+          vendorId: wo.vendorId || '',
+          vendorName: wo.vendor?.companyName || wo.vendorName || wo.assignedTechnician || 'Unassigned',
+          assignedTechnician: wo.assignedTechnician || wo.vendor?.contactName || wo.vendorName || 'Unassigned',
+          scheduledDate: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          priority: wo.priority || 'Normal',
+          status: wo.status === 'Open' || wo.status === 'Submitted' ? 'Open' : wo.status === 'InProgress' || wo.status === 'In Progress' ? 'In Progress' : wo.status === 'Completed' ? 'Completed' : wo.status === 'Cancelled' ? 'Cancelled' : wo.status || 'Open',
+          estimatedCost: est,
+          actualCost: act,
+          title: wo.title,
+          description: wo.description,
+          createdAt: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          rejectReason: wo.rejectReason || null,
+          resolutionNotes: wo.resolutionNotes || null,
+        };
+      });
 
-      const formattedServiceRequests = serviceRequests.map((sr: any) => ({
-        id: sr.id,
-        workOrderNumber: `#${sr.id.slice(0, 8)}`,
-        propertyId: sr.propertyId,
-        propertyName: sr.propertyName || 'Property',
-        unitNumber: sr.unitNumber ? (sr.unitNumber.toLowerCase().includes('unit') ? sr.unitNumber : `Unit ${sr.unitNumber}`) : 'Unit 101',
-        vendorId: sr.assignedVendorId || '',
-        vendorName: sr.assignedVendorName || 'Unassigned',
-        assignedTechnician: sr.assignedTechnician || sr.assignedVendorName || 'Unassigned',
-        scheduledDate: sr.scheduledDate || (sr.createdAt ? new Date(sr.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
-        priority: sr.priority === 'Normal' ? 'Medium' : sr.priority || 'Medium',
-        status: sr.status === 'Open' || sr.status === 'New' || sr.status === 'Submitted' ? 'Open' : sr.status === 'InProgress' || sr.status === 'In Progress' ? 'In Progress' : sr.status === 'Completed' ? 'Completed' : sr.status === 'Closed' ? 'Closed' : sr.status === 'Rejected' ? 'Rejected' : sr.status === 'Assigned' ? 'Assigned' : sr.status || 'Open',
-        estimatedCost: sr.estimatedCost || sr.cost || 0,
-        actualCost: sr.cost || 0,
-        title: sr.title,
-        description: sr.description || '',
-        createdAt: sr.createdAt ? new Date(sr.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        rejectReason: sr.notes || null,
-        resolutionNotes: null,
-      }));
+      const formattedServiceRequests = serviceRequests.map((sr: any, index: number) => {
+        const est = Number(sr.estimatedCost || sr.cost || 0);
+        const act = Number(sr.actualCost || sr.cost || est);
+        return {
+          id: sr.id,
+          workOrderNumber: `SR-${1001 + index}`,
+          propertyId: sr.propertyId,
+          propertyName: sr.propertyName || 'Property',
+          unitNumber: sr.unitNumber ? (String(sr.unitNumber).toLowerCase().includes('unit') ? sr.unitNumber : `Unit ${sr.unitNumber}`) : 'Unit 101',
+          vendorId: sr.assignedVendorId || '',
+          vendorName: sr.assignedVendorName || sr.assignedTechnician || 'Unassigned',
+          assignedTechnician: sr.assignedTechnician || sr.assignedVendorName || 'Unassigned',
+          scheduledDate: sr.scheduledDate || (sr.createdAt ? new Date(sr.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+          priority: sr.priority === 'Normal' ? 'Medium' : sr.priority || 'Medium',
+          status: sr.status === 'Open' || sr.status === 'New' || sr.status === 'Submitted' ? 'Open' : sr.status === 'InProgress' || sr.status === 'In Progress' ? 'In Progress' : sr.status === 'Completed' ? 'Completed' : sr.status === 'Closed' ? 'Closed' : sr.status === 'Rejected' ? 'Rejected' : sr.status === 'Assigned' ? 'Assigned' : sr.status || 'Open',
+          estimatedCost: est,
+          actualCost: act,
+          title: sr.title,
+          description: sr.description || '',
+          createdAt: sr.createdAt ? new Date(sr.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          rejectReason: sr.notes || null,
+          resolutionNotes: null,
+        };
+      });
 
       const combined = [...formattedServiceRequests, ...formattedWorkOrders];
       return sendSuccess({ res, data: combined });
@@ -169,7 +177,7 @@ export class WorkOrderController {
   async update(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const id = req.params['id'] as string;
-      const { status, priority, estimatedCost, actualCost, vendorId, rejectReason, resolutionNotes } = req.body;
+      const { status, priority, estimatedCost, actualCost, extraCost, cost, vendorId, rejectReason, resolutionNotes } = req.body;
       const companyId = req.user?.companyId;
 
       const statusMap: Record<string, string> = {
@@ -189,6 +197,7 @@ export class WorkOrderController {
       };
 
       const finalStatus = status ? (statusMap[status] ?? status) : undefined;
+      const resolvedActualCost = actualCost !== undefined ? parseFloat(String(actualCost)) : (cost !== undefined ? parseFloat(String(cost)) : undefined);
 
       // 1. Check ServiceRequest table
       const existingSr = await prisma.serviceRequest.findUnique({ where: { id } });
@@ -198,7 +207,7 @@ export class WorkOrderController {
           where: { id },
           data: {
             ...(srStatus && { status: srStatus }),
-            ...(actualCost !== undefined && { cost: parseFloat(String(actualCost)) }),
+            ...(resolvedActualCost !== undefined && { cost: resolvedActualCost }),
             ...(estimatedCost !== undefined && { estimatedCost: parseFloat(String(estimatedCost)) }),
             ...(rejectReason && { notes: rejectReason }),
           },
@@ -215,7 +224,7 @@ export class WorkOrderController {
             ...(finalStatus && { status: finalStatus as any }),
             ...(priority && { priority }),
             ...(estimatedCost !== undefined && { estimatedCost: parseFloat(String(estimatedCost)) }),
-            ...(actualCost !== undefined && { actualCost: parseFloat(String(actualCost)) }),
+            ...(resolvedActualCost !== undefined && { actualCost: resolvedActualCost }),
             ...(vendorId && { vendorId }),
             ...(rejectReason && { rejectReason }),
             ...(resolutionNotes && { resolutionNotes }),

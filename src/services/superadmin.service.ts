@@ -229,17 +229,10 @@ export class SuperAdminService {
   }
 
   async updateCompanyUserStatus(id: string, status: string) {
-    const companyUser = await prisma.companyUser.update({
+    return prisma.companyUser.update({
       where: { id },
       data: { status },
     });
-    if (companyUser.email) {
-      await prisma.user.updateMany({
-        where: { email: companyUser.email },
-        data: { status },
-      });
-    }
-    return companyUser;
   }
 
   async deleteCompanyUser(id: string) {
