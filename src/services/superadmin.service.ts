@@ -95,13 +95,13 @@ export class SuperAdminService {
     });
   }
 
-  async getCompanyUsers(companyId?: string) {
+  async getCompanyUsers(companyId?: string, isSuperAdmin = false) {
     const whereClause: any = {};
-    if (companyId) {
+    if (!isSuperAdmin) {
+      if (!companyId) return [];
       whereClause.companyId = companyId;
-      whereClause.role = {
-        in: ['Maintenance Staff', 'Collection Manager', 'Maintenance'],
-      };
+    } else if (companyId) {
+      whereClause.companyId = companyId;
     }
 
     const companyUsers = await prisma.companyUser.findMany({

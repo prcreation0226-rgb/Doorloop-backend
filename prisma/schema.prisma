@@ -7,47 +7,619 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id                  String           @id @default(uuid())
-  email               String           @unique
-  passwordHash        String
-  firstName           String
-  lastName            String
-  phone               String?
-  roleId              String
-  status              String           @default("Active")
-  lastLogin           DateTime?
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+model ai_chat_logs {
+  id        String     @id
+  userId    String?
+  prompt    String     @db.Text
+  response  String     @db.Text
+  createdAt DateTime   @default(now())
+  companyId String?
+  companies companies? @relation(fields: [companyId], references: [id])
+
+  @@index([companyId], map: "ai_chat_logs_companyId_fkey")
+}
+
+model announcements {
+  id        String     @id
+  title     String
+  content   String     @db.Text
+  category  String     @default("General")
+  author    String     @default("Property Management")
+  isPinned  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime
+  companyId String?
+  companies companies? @relation(fields: [companyId], references: [id])
+
+  @@index([companyId], map: "announcements_companyId_fkey")
+}
+
+model applications {
+  id            String     @id
+  tenantName    String
+  email         String
+  propertyName  String
+  unitNumber    String
+  status        String     @default("Pending")
+  submittedDate DateTime   @default(now())
+  rentProposed  Float
+  createdAt     DateTime   @default(now())
+  companyId     String?
+  companies     companies? @relation(fields: [companyId], references: [id])
+
+  @@index([companyId], map: "applications_companyId_fkey")
+}
+
+model audit_logs {
+  id        String   @id
+  timestamp DateTime @default(now())
+  userId    String?
+  action    String
+  module    String
+  object    String
+  ip        String
+  status    String   @default("Success")
+  users     users?   @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model bank_accounts {
+  id            String     @id
+  name          String
+  institution   String
+  accountNumber String
+  balance       Float      @default(0)
+  type          String
+  status        String     @default("Active")
+  createdAt     DateTime   @default(now())
+  companyId     String?
+  companies     companies? @relation(fields: [companyId], references: [id])
+
+  @@index([companyId], map: "bank_accounts_companyId_fkey")
+}
+
+model buildings {
+  id            String     @id
+  propertyId    String
+  name          String
+  floors        Int        @default(1)
+  unitsCount    Int        @default(0)
+  occupancyRate Float      @default(0)
+  properties    properties @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  units         units[]
+
+  @@index([propertyId], map: "buildings_propertyId_fkey")
+}
+
+model charges {
+  id        String   @id
+  tenantId  String
+  title     String
+  amount    Float
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  tenants   tenants  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId], map: "charges_tenantId_fkey")
+}
+
+model coa_accounts {
+  id                  String                @id
+  accountCode         String                @unique
+  accountName         String
+  type                String
+  subType             String?
+  balance             Float                 @default(0)
+  isActive            Boolean               @default(true)
   companyId           String?
-  auditLogs           AuditLog[]
-  assignedInspections Inspection[]     @relation("InspectorRelation")
-  assignments         UserAssignment[]
-  company             Company?         @relation(fields: [companyId], references: [id])
-  role                Role             @relation(fields: [roleId], references: [id])
+  companies           companies?            @relation(fields: [companyId], references: [id])
+  journal_entry_lines journal_entry_lines[]
 
-  @@index([companyId], map: "users_companyId_fkey")
-  @@index([roleId], map: "users_roleId_fkey")
-  @@map("users")
+  @@index([companyId], map: "coa_accounts_companyId_fkey")
 }
 
-model Role {
-  id          String       @id @default(uuid())
-  name        String
-  description String?      @db.Text
-  isCustom    Boolean      @default(false)
-  companyId   String?
-  permissions Permission[]
-  users       User[]
-  company     Company?     @relation(fields: [companyId], references: [id])
-
-  @@unique([name, companyId])
-  @@index([companyId], map: "roles_companyId_fkey")
-  @@map("roles")
+model companies {
+  id                   String                 @id
+  name                 String
+  code                 String                 @unique
+  contactName          String
+  email                String                 @unique
+  phone                String
+  planName             String                 @default("Pro Plan")
+  storageUsed          String                 @default("1.2 GB")
+  status               String                 @default("Active")
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime
+  ai_chat_logs         ai_chat_logs[]
+  announcements        announcements[]
+  applications         applications[]
+  bank_accounts        bank_accounts[]
+  coa_accounts         coa_accounts[]
+  company_users        company_users[]
+  documents            documents[]
+  inspection_templates inspection_templates[]
+  inspections          inspections[]
+  insurance_policies   insurance_policies[]
+  invoices             invoices[]
+  journal_entries      journal_entries[]
+  leases               leases[]
+  move_ins             move_ins[]
+  move_outs            move_outs[]
+  notifications        notifications[]
+  owner_documents      owner_documents[]
+  owners               owners[]
+  promotions           promotions[]
+  properties           properties[]
+  rent_payments        rent_payments[]
+  roles                roles[]
+  saas_invoices        saas_invoices[]
+  screening_reports    screening_reports[]
+  service_requests     service_requests[]
+  staff_profiles       staff_profiles[]
+  tenant_documents     tenant_documents[]
+  tenants              tenants[]
+  users                users[]
+  vendors              vendors[]
+  violations           violations[]
+  work_orders          work_orders[]
 }
 
-model Permission {
-  id         String  @id @default(uuid())
+model company_users {
+  id        String    @id
+  companyId String
+  name      String
+  email     String    @unique
+  role      String    @default("Admin")
+  status    String    @default("Active")
+  createdAt DateTime  @default(now())
+  companies companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "company_users_companyId_fkey")
+}
+
+model crm_leads {
+  id            String   @id
+  email         String
+  phone         String
+  budget        Float?
+  moveInDate    String?
+  source        String
+  priority      String?  @default("Medium")
+  assignedAgent String?
+  notes         String?  @db.Text
+  status        String   @default("New")
+  createdAt     DateTime @default(now())
+  companyId     String?
+  name          String
+  property      String?
+}
+
+model damage_review_items {
+  id               String                        @id
+  moveOutId        String
+  inspectionItemId String
+  roomName         String
+  itemLabel        String
+  condition        damage_review_items_condition
+  notes            String?                       @db.Text
+  decision         damage_review_items_decision?
+  chargeAmount     Float?
+  reviewedBy       String?
+  reviewedAt       DateTime?
+  createdAt        DateTime                      @default(now())
+  move_outs        move_outs                     @relation(fields: [moveOutId], references: [id], onDelete: Cascade)
+
+  @@index([moveOutId], map: "damage_review_items_moveOutId_fkey")
+}
+
+model deposits {
+  id        String   @id
+  tenantId  String
+  amount    Float
+  status    String   @default("Held")
+  createdAt DateTime @default(now())
+  tenants   tenants  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId], map: "deposits_tenantId_fkey")
+}
+
+model documents {
+  id         String     @id
+  name       String
+  category   String     @default("General")
+  fileUrl    String
+  fileSize   String     @default("1.2 MB")
+  uploadedBy String     @default("Property Manager")
+  createdAt  DateTime   @default(now())
+  companyId  String?
+  companies  companies? @relation(fields: [companyId], references: [id])
+
+  @@index([companyId], map: "documents_companyId_fkey")
+}
+
+model expenses {
+  id          String   @id
+  category    String
+  amount      Float
+  date        DateTime @default(now())
+  description String   @db.Text
+  createdAt   DateTime @default(now())
+}
+
+model incomes {
+  id          String   @id
+  category    String
+  amount      Float
+  date        DateTime @default(now())
+  description String   @db.Text
+  status      String   @default("Cleared")
+  createdAt   DateTime @default(now())
+}
+
+model inspection_items {
+  id                String                      @id
+  roomId            String
+  label             String
+  required          Boolean                     @default(false)
+  sortOrder         Int                         @default(0)
+  condition         inspection_items_condition?
+  notes             String?                     @db.Text
+  completed         Boolean                     @default(false)
+  inspection_rooms  inspection_rooms            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  inspection_photos inspection_photos[]
+
+  @@index([roomId], map: "inspection_items_roomId_fkey")
+}
+
+model inspection_photos {
+  id               String           @id
+  itemId           String
+  url              String           @db.Text
+  caption          String?
+  sortOrder        Int              @default(0)
+  uploadedBy       String?
+  createdAt        DateTime         @default(now())
+  inspection_items inspection_items @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId], map: "inspection_photos_itemId_fkey")
+}
+
+model inspection_rooms {
+  id               String             @id
+  inspectionId     String
+  name             String
+  sortOrder        Int                @default(0)
+  inspection_items inspection_items[]
+  inspections      inspections        @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId], map: "inspection_rooms_inspectionId_fkey")
+}
+
+model inspection_template_items {
+  id                        String                    @id
+  roomId                    String
+  label                     String
+  required                  Boolean                   @default(false)
+  sortOrder                 Int                       @default(0)
+  inspection_template_rooms inspection_template_rooms @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId], map: "inspection_template_items_roomId_fkey")
+}
+
+model inspection_template_rooms {
+  id                        String                      @id
+  templateId                String
+  name                      String
+  sortOrder                 Int                         @default(0)
+  inspection_template_items inspection_template_items[]
+  inspection_templates      inspection_templates        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId], map: "inspection_template_rooms_templateId_fkey")
+}
+
+model inspection_templates {
+  id                        String                      @id
+  name                      String
+  type                      inspection_templates_type   @default(MOVE_IN)
+  description               String?                     @db.Text
+  active                    Boolean                     @default(true)
+  createdBy                 String?
+  createdAt                 DateTime                    @default(now())
+  companyId                 String?
+  inspection_template_rooms inspection_template_rooms[]
+  companies                 companies?                  @relation(fields: [companyId], references: [id])
+
+  @@index([companyId], map: "inspection_templates_companyId_fkey")
+}
+
+model inspections {
+  id                  String             @id
+  status              inspections_status @default(DRAFT)
+  createdAt           DateTime           @default(now())
+  assignedAt          DateTime?
+  assignedBy          String?
+  assignedInspectorId String?
+  cancelReason        String?            @db.Text
+  cancelledAt         DateTime?
+  cancelledBy         String?
+  companyId           String?
+  completedAt         DateTime?
+  createdBy           String?
+  inspectionNumber    String             @unique
+  inspectorSignature  String?            @db.Text
+  inspectorSignedAt   DateTime?
+  managerNotes        String?            @db.Text
+  moveInId            String?
+  moveOutId           String?
+  overallNotes        String?            @db.Text
+  startedAt           DateTime           @default(now())
+  templateId          String?
+  templateName        String
+  templateVersion     Int                @default(1)
+  tenantSignature     String?            @db.Text
+  tenantSignedAt      DateTime?
+  type                inspections_type   @default(MOVE_IN)
+  updatedAt           DateTime
+  inspection_rooms    inspection_rooms[]
+  users               users?             @relation(fields: [assignedInspectorId], references: [id])
+  companies           companies?         @relation(fields: [companyId], references: [id])
+  move_ins            move_ins?          @relation(fields: [moveInId], references: [id], onDelete: Cascade)
+  move_outs           move_outs?         @relation(fields: [moveOutId], references: [id], onDelete: Cascade)
+
+  @@index([assignedInspectorId], map: "inspections_assignedInspectorId_fkey")
+  @@index([companyId], map: "inspections_companyId_fkey")
+  @@index([moveInId], map: "inspections_moveInId_fkey")
+  @@index([moveOutId], map: "inspections_moveOutId_fkey")
+}
+
+model insurance_policies {
+  id             String     @id
+  tenantId       String
+  policyNumber   String
+  provider       String
+  coverageAmount Float
+  startDate      DateTime
+  endDate        DateTime
+  status         String     @default("Active")
+  createdAt      DateTime   @default(now())
+  companyId      String?
+  companies      companies? @relation(fields: [companyId], references: [id])
+  tenants        tenants    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "insurance_policies_companyId_fkey")
+  @@index([tenantId], map: "insurance_policies_tenantId_fkey")
+}
+
+model invoices {
+  id           String     @id
+  tenantId     String
+  tenantName   String
+  propertyId   String
+  propertyName String
+  unitNumber   String     @default("")
+  amount       Float
+  paidAmount   Float      @default(0)
+  balance      Float
+  status       String     @default("Draft")
+  lineItems    String     @db.Text
+  notes        String?    @db.Text
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime
+  companyId    String?
+  dueDate      String
+  companies    companies? @relation(fields: [companyId], references: [id])
+  tenants      tenants    @relation(fields: [tenantId], references: [id])
+
+  @@index([companyId], map: "invoices_companyId_fkey")
+  @@index([tenantId], map: "invoices_tenantId_fkey")
+}
+
+model journal_entries {
+  id                  String                @id
+  entryNumber         String                @unique
+  date                DateTime
+  description         String                @db.Text
+  reference           String?
+  companyId           String?
+  companies           companies?            @relation(fields: [companyId], references: [id])
+  journal_entry_lines journal_entry_lines[]
+
+  @@index([companyId], map: "journal_entries_companyId_fkey")
+}
+
+model journal_entry_lines {
+  id              String          @id
+  journalEntryId  String
+  accountId       String
+  debit           Float           @default(0)
+  credit          Float           @default(0)
+  coa_accounts    coa_accounts    @relation(fields: [accountId], references: [id])
+  journal_entries journal_entries @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+
+  @@index([accountId], map: "journal_entry_lines_accountId_fkey")
+  @@index([journalEntryId], map: "journal_entry_lines_journalEntryId_fkey")
+}
+
+model leases {
+  id            String          @id
+  tenantId      String
+  propertyId    String
+  unitId        String
+  startDate     DateTime
+  endDate       DateTime
+  rentAmount    Float
+  depositAmount Float
+  status        leases_status   @default(Pending_Move_In)
+  companyId     String?
+  companies     companies?      @relation(fields: [companyId], references: [id])
+  properties    properties      @relation(fields: [propertyId], references: [id])
+  tenants       tenants         @relation(fields: [tenantId], references: [id])
+  units         units           @relation(fields: [unitId], references: [id])
+  move_ins      move_ins?
+  move_outs     move_outs?
+  rent_payments rent_payments[]
+
+  @@index([companyId], map: "leases_companyId_fkey")
+  @@index([propertyId], map: "leases_propertyId_fkey")
+  @@index([tenantId], map: "leases_tenantId_fkey")
+  @@index([unitId], map: "leases_unitId_fkey")
+}
+
+model maintenance_requests {
+  id           String   @id
+  title        String
+  description  String   @db.Text
+  propertyName String
+  unitNumber   String
+  priority     String   @default("Normal")
+  status       String   @default("New")
+  createdAt    DateTime @default(now())
+}
+
+model move_ins {
+  id            String          @id
+  leaseId       String          @unique
+  unitId        String
+  scheduledDate DateTime
+  completedDate DateTime?
+  status        move_ins_status @default(SCHEDULED)
+  notes         String?         @db.Text
+  createdBy     String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  companyId     String?
+  inspections   inspections[]
+  companies     companies?      @relation(fields: [companyId], references: [id])
+  leases        leases          @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  units         units           @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "move_ins_companyId_fkey")
+  @@index([unitId], map: "move_ins_unitId_fkey")
+}
+
+model move_out_deposit_summaries {
+  id              String    @id
+  moveOutId       String    @unique
+  originalDeposit Float
+  totalCharges    Float     @default(0)
+  refundAmount    Float     @default(0)
+  notes           String?   @db.Text
+  approvedBy      String?
+  approvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime
+  move_outs       move_outs @relation(fields: [moveOutId], references: [id], onDelete: Cascade)
+}
+
+model move_outs {
+  id                         String                      @id
+  leaseId                    String                      @unique
+  unitId                     String
+  scheduledDate              DateTime
+  completedDate              DateTime?
+  status                     move_outs_status            @default(SCHEDULED)
+  notes                      String?                     @db.Text
+  cancelReason               String?                     @db.Text
+  cancelledBy                String?
+  cancelledAt                DateTime?
+  createdBy                  String?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime
+  companyId                  String?
+  damage_review_items        damage_review_items[]
+  inspections                inspections[]
+  move_out_deposit_summaries move_out_deposit_summaries?
+  companies                  companies?                  @relation(fields: [companyId], references: [id])
+  leases                     leases                      @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  units                      units                       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "move_outs_companyId_fkey")
+  @@index([unitId], map: "move_outs_unitId_fkey")
+}
+
+model notifications {
+  id        String     @id
+  userId    String?
+  title     String
+  message   String     @db.Text
+  type      String     @default("info")
+  read      Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  companyId String?
+  companies companies? @relation(fields: [companyId], references: [id])
+
+  @@index([companyId], map: "notifications_companyId_fkey")
+}
+
+model owner_distributions {
+  id            String   @id
+  ownerId       String
+  period        String
+  amount        Float
+  status        String   @default("Completed")
+  processedDate DateTime @default(now())
+  owners        owners   @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId], map: "owner_distributions_ownerId_fkey")
+}
+
+model owner_documents {
+  id         String     @id
+  name       String
+  category   String     @default("Statements")
+  size       String     @default("1.2 MB")
+  uploadedAt DateTime   @default(now())
+  fileUrl    String?
+  ownerId    String?
+  propertyId String?
+  companyId  String?
+  companies  companies? @relation(fields: [companyId], references: [id])
+
+  @@index([companyId], map: "owner_documents_companyId_fkey")
+}
+
+model owner_messages {
+  id        String   @id
+  sender    String
+  recipient String
+  subject   String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+}
+
+model owners {
+  id                   String                @id
+  name                 String                @default("")
+  companyName          String?
+  email                String                @unique
+  phone                String
+  streetAddress        String?
+  payoutMethod         String                @default("ACH/Direct Deposit")
+  propertiesOwnedCount Int                   @default(0)
+  createdAt            DateTime              @default(now())
+  companyId            String?
+  owner_distributions  owner_distributions[]
+  companies            companies?            @relation(fields: [companyId], references: [id])
+  properties           properties[]
+
+  @@index([companyId], map: "owners_companyId_fkey")
+}
+
+model payment_plans {
+  id          String   @id
+  tenantId    String
+  totalAmount Float
+  frequency   String
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+  tenants     tenants  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId], map: "payment_plans_tenantId_fkey")
+}
+
+model permissions {
+  id         String  @id
   roleId     String
   module     String
   canView    Boolean @default(false)
@@ -56,100 +628,296 @@ model Permission {
   canDelete  Boolean @default(false)
   canApprove Boolean @default(false)
   canExport  Boolean @default(false)
-  role       Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roles      roles   @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, module])
-  @@map("permissions")
 }
 
-model UserAssignment {
-  id         String  @id @default(uuid())
-  userId     String
-  propertyId String?
-  buildingId String?
-  unitId     String?
-  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId], map: "user_assignments_userId_fkey")
-  @@map("user_assignments")
+model platform_settings {
+  id        String   @id
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime
 }
 
-model Owner {
-  id                   String              @id @default(uuid())
-  email                String              @unique
-  phone                String
-  payoutMethod         String              @default("ACH/Direct Deposit")
-  propertiesOwnedCount Int                 @default(0)
-  createdAt            DateTime            @default(now())
-  streetAddress        String?
-  companyId            String?
-  companyName          String?
-  name                 String              @default("")
-  distributions        OwnerDistribution[]
-  company              Company?            @relation(fields: [companyId], references: [id])
-  properties           Property[]
+model promotions {
+  id        String     @id
+  code      String     @unique
+  discount  String
+  duration  String
+  used      Int        @default(0)
+  maxUses   Int        @default(100)
+  status    String     @default("Active")
+  createdAt DateTime   @default(now())
+  companyId String?
+  companies companies? @relation(fields: [companyId], references: [id])
 
-  @@index([companyId], map: "owners_companyId_fkey")
-  @@map("owners")
+  @@index([companyId], map: "promotions_companyId_fkey")
 }
 
-model Property {
-  id                  String        @id @default(uuid())
+model properties {
+  id                  String          @id
   name                String
-  type                PropertyType  @default(Apartment)
-  status              String        @default("Active")
+  type                properties_type @default(Apartment)
+  status              String          @default("Active")
   ownerId             String
-  ownershipPercentage Float         @default(100)
-  managementCompany   String        @default("Apex Property Management")
+  ownershipPercentage Float           @default(100)
+  managementCompany   String          @default("Apex Property Management")
   address             String
   streetAddress       String
   city                String
   state               String
-  country             String        @default("USA")
+  country             String          @default("USA")
   zip                 String
-  unitsCount          Int           @default(0)
-  occupiedUnits       Int           @default(0)
-  occupancyRate       Float         @default(0)
-  monthlyRevenue      Float         @default(0)
+  unitsCount          Int             @default(0)
+  occupiedUnits       Int             @default(0)
+  occupancyRate       Float           @default(0)
+  monthlyRevenue      Float           @default(0)
   yearBuilt           Int
-  totalBuildings      Int           @default(1)
+  totalBuildings      Int             @default(1)
   squareFootage       Float
   purchasePrice       Float
   currentValue        Float
-  monthlyExpenses     Float         @default(0)
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  monthlyExpenses     Float           @default(0)
+  imageUrl            String?         @db.Text
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime
   companyId           String?
-  imageUrl            String?       @db.Text
-  buildings           Building[]
-  leases              Lease[]
-  company             Company?      @relation(fields: [companyId], references: [id])
-  owner               Owner         @relation(fields: [ownerId], references: [id])
-  rentPayments        RentPayment[]
-  units               Unit[]
-  workOrders          WorkOrder[]
+  buildings           buildings[]
+  leases              leases[]
+  companies           companies?      @relation(fields: [companyId], references: [id])
+  owners              owners          @relation(fields: [ownerId], references: [id])
+  rent_payments       rent_payments[]
+  units               units[]
+  work_orders         work_orders[]
 
   @@index([companyId], map: "properties_companyId_fkey")
   @@index([ownerId], map: "properties_ownerId_fkey")
-  @@map("properties")
 }
 
-model Building {
-  id            String   @id @default(uuid())
-  propertyId    String
-  name          String
-  floors        Int      @default(1)
-  unitsCount    Int      @default(0)
-  occupancyRate Float    @default(0)
-  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  units         Unit[]
+model rent_payments {
+  id              String                      @id
+  tenantId        String
+  propertyId      String
+  unitId          String
+  leaseId         String
+  amount          Float
+  dueDate         DateTime
+  paidDate        DateTime?
+  status          rent_payments_status        @default(Pending)
+  paymentMethod   rent_payments_paymentMethod @default(ACH)
+  referenceNumber String?
+  createdBy       String                      @default("System")
+  companyId       String?
+  companies       companies?                  @relation(fields: [companyId], references: [id])
+  leases          leases                      @relation(fields: [leaseId], references: [id])
+  properties      properties                  @relation(fields: [propertyId], references: [id])
+  tenants         tenants                     @relation(fields: [tenantId], references: [id])
+  units           units                       @relation(fields: [unitId], references: [id])
 
-  @@index([propertyId], map: "buildings_propertyId_fkey")
-  @@map("buildings")
+  @@index([companyId], map: "rent_payments_companyId_fkey")
+  @@index([leaseId], map: "rent_payments_leaseId_fkey")
+  @@index([propertyId], map: "rent_payments_propertyId_fkey")
+  @@index([tenantId], map: "rent_payments_tenantId_fkey")
+  @@index([unitId], map: "rent_payments_unitId_fkey")
 }
 
-model Unit {
-  id               String        @id @default(uuid())
+model roles {
+  id          String        @id
+  name        String
+  description String?       @db.Text
+  isCustom    Boolean       @default(false)
+  companyId   String?
+  permissions permissions[]
+  companies   companies?    @relation(fields: [companyId], references: [id])
+  users       users[]
+
+  @@unique([name, companyId])
+  @@index([companyId], map: "roles_companyId_fkey")
+}
+
+model saas_invoices {
+  id          String    @id
+  companyId   String
+  companyName String
+  amount      Float
+  status      String    @default("Paid")
+  dueDate     DateTime
+  paidDate    DateTime?
+  createdAt   DateTime  @default(now())
+  companies   companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "saas_invoices_companyId_fkey")
+}
+
+model saas_plans {
+  id            String   @id
+  name          String   @unique
+  price         Float
+  billingCycle  String   @default("Monthly")
+  maxProperties Int      @default(50)
+  maxUnits      Int      @default(500)
+  features      String   @db.Text
+  createdAt     DateTime @default(now())
+}
+
+model screening_reports {
+  id           String     @id
+  tenantId     String
+  creditScore  Int
+  criminalPass Boolean    @default(true)
+  evictionPass Boolean    @default(true)
+  status       String     @default("Approved")
+  createdAt    DateTime   @default(now())
+  companyId    String?
+  companies    companies? @relation(fields: [companyId], references: [id])
+  tenants      tenants    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "screening_reports_companyId_fkey")
+  @@index([tenantId], map: "screening_reports_tenantId_fkey")
+}
+
+model security_policies {
+  id             String  @id
+  mfaRequired    Boolean @default(true)
+  sessionTimeout Int     @default(30)
+  passwordPolicy String  @default("Strong")
+  ipWhitelist    String  @default("192.168.1.0/24")
+}
+
+model service_requests {
+  id                 String     @id
+  title              String
+  description        String     @db.Text
+  propertyId         String
+  propertyName       String
+  unitNumber         String     @default("")
+  tenantId           String?
+  tenantName         String
+  priority           String     @default("Normal")
+  status             String     @default("New")
+  category           String     @default("General")
+  assignedVendorId   String?
+  assignedVendorName String?
+  assignedTechnician String?
+  estimatedCost      Float?
+  cost               Float?
+  scheduledDate      String?
+  notes              String?    @db.Text
+  messages           String     @db.Text
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime
+  companyId          String?
+  companies          companies? @relation(fields: [companyId], references: [id])
+
+  @@index([companyId], map: "service_requests_companyId_fkey")
+}
+
+model signatures {
+  id             String   @id
+  documentName   String
+  documentId     String
+  recipientName  String
+  recipientEmail String
+  status         String   @default("Sent")
+  sentAt         DateTime @default(now())
+  expiresAt      DateTime @default(now())
+  createdAt      DateTime @default(now())
+}
+
+model staff_profiles {
+  id                 String     @id
+  name               String     @default("Marcus Vance")
+  specialist         String     @default("Senior Maintenance Lead")
+  email              String     @unique @default("marcus.vance@apexpm.com")
+  phone              String     @default("(512) 555-0199")
+  role               String     @default("Maintenance Staff")
+  assignedProperties String     @default("Sunset Villas, Apex Heights, Lakeside")
+  joinedDate         String     @default("January 15th, 2025")
+  isAvailable        Boolean    @default(true)
+  completedJobs      Int        @default(142)
+  avgResponseTime    String     @default("38 Min")
+  customerRating     String     @default("4.92 / 5.0")
+  createdAt          DateTime   @default(now())
+  companyId          String?
+  companies          companies? @relation(fields: [companyId], references: [id])
+
+  @@index([companyId], map: "staff_profiles_companyId_fkey")
+}
+
+model subscription_plans {
+  id           String   @id
+  planName     String
+  price        Float
+  billingCycle String
+  nextInvoice  DateTime
+  usageLimit   String
+  createdAt    DateTime @default(now())
+}
+
+model tenant_documents {
+  id         String     @id
+  name       String
+  category   String     @default("Leasing")
+  size       String     @default("1.5 MB")
+  uploadedAt DateTime   @default(now())
+  fileUrl    String?
+  tenantId   String?
+  propertyId String?
+  buildingId String?
+  unitId     String?
+  companyId  String?
+  companies  companies? @relation(fields: [companyId], references: [id])
+
+  @@index([companyId], map: "tenant_documents_companyId_fkey")
+}
+
+model tenant_messages {
+  id        String   @id
+  sender    String
+  recipient String
+  subject   String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+}
+
+model tenant_notifications {
+  id        String   @id
+  title     String
+  message   String   @db.Text
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model tenants {
+  id                 String               @id
+  firstName          String
+  lastName           String
+  email              String               @unique
+  phone              String
+  unitId             String?
+  status             tenants_status       @default(Pending)
+  createdAt          DateTime             @default(now())
+  companyId          String?
+  imageUrl           String?              @db.Text
+  charges            charges[]
+  deposits           deposits[]
+  insurance_policies insurance_policies[]
+  invoices           invoices[]
+  leases             leases[]
+  payment_plans      payment_plans[]
+  rent_payments      rent_payments[]
+  screening_reports  screening_reports[]
+  companies          companies?           @relation(fields: [companyId], references: [id])
+  units              units?               @relation(fields: [unitId], references: [id])
+
+  @@index([companyId], map: "tenants_companyId_fkey")
+  @@index([unitId], map: "tenants_unitId_fkey")
+}
+
+model units {
+  id               String          @id
   propertyId       String
   buildingId       String
   unitNumber       String
@@ -160,953 +928,123 @@ model Unit {
   rentAmount       Float
   securityDeposit  Float
   availabilityDate DateTime
-  status           UnitStatus    @default(Vacant)
-  leases           Lease[]
-  moveIns          MoveIn[]
-  moveOuts         MoveOut[]
-  rentPayments     RentPayment[]
-  tenants          Tenant[]
-  building         Building      @relation(fields: [buildingId], references: [id], onDelete: Cascade)
-  property         Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  violations       Violation[]
+  status           units_status    @default(Vacant)
+  leases           leases[]
+  move_ins         move_ins[]
+  move_outs        move_outs[]
+  rent_payments    rent_payments[]
+  tenants          tenants[]
+  buildings        buildings       @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  properties       properties      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  violations       violations[]
 
   @@index([buildingId], map: "units_buildingId_fkey")
   @@index([propertyId], map: "units_propertyId_fkey")
-  @@map("units")
 }
 
-model Tenant {
-  id                String            @id @default(uuid())
-  firstName         String
-  lastName          String
-  email             String            @unique
-  phone             String
-  unitId            String?
-  status            TenantStatus      @default(Pending)
-  createdAt         DateTime          @default(now())
-  companyId         String?
-  imageUrl          String?           @db.Text
-  charges           Charge[]
-  deposits          Deposit[]
-  insurancePolicies InsurancePolicy[]
-  invoices          Invoice[]
-  leases            Lease[]
-  paymentPlans      PaymentPlan[]
-  payments          RentPayment[]
-  screeningReports  ScreeningReport[]
-  company           Company?          @relation(fields: [companyId], references: [id])
-  unit              Unit?             @relation(fields: [unitId], references: [id])
+model user_assignments {
+  id         String  @id
+  userId     String
+  propertyId String?
+  buildingId String?
+  unitId     String?
+  users      users   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([companyId], map: "tenants_companyId_fkey")
-  @@index([unitId], map: "tenants_unitId_fkey")
-  @@map("tenants")
+  @@index([userId], map: "user_assignments_userId_fkey")
 }
 
-model Lease {
-  id            String        @id @default(uuid())
-  tenantId      String
-  propertyId    String
-  unitId        String
-  startDate     DateTime
-  endDate       DateTime
-  rentAmount    Float
-  depositAmount Float
-  status        LeaseStatus   @default(Pending_Move_In)
-  companyId     String?
-  company       Company?      @relation(fields: [companyId], references: [id])
-  property      Property      @relation(fields: [propertyId], references: [id])
-  tenant        Tenant        @relation(fields: [tenantId], references: [id])
-  unit          Unit          @relation(fields: [unitId], references: [id])
-  moveIn        MoveIn?
-  moveOut       MoveOut?
-  payments      RentPayment[]
+model users {
+  id               String             @id
+  email            String             @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  phone            String?
+  roleId           String
+  status           String             @default("Active")
+  lastLogin        DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  companyId        String?
+  audit_logs       audit_logs[]
+  inspections      inspections[]
+  user_assignments user_assignments[]
+  companies        companies?         @relation(fields: [companyId], references: [id])
+  roles            roles              @relation(fields: [roleId], references: [id])
 
-  @@index([companyId], map: "leases_companyId_fkey")
-  @@index([propertyId], map: "leases_propertyId_fkey")
-  @@index([tenantId], map: "leases_tenantId_fkey")
-  @@index([unitId], map: "leases_unitId_fkey")
-  @@map("leases")
+  @@index([companyId], map: "users_companyId_fkey")
+  @@index([roleId], map: "users_roleId_fkey")
 }
 
-model RentPayment {
-  id              String        @id @default(uuid())
-  tenantId        String
-  propertyId      String
-  unitId          String
-  leaseId         String
-  amount          Float
-  dueDate         DateTime
-  paidDate        DateTime?
-  status          PaymentStatus @default(Pending)
-  paymentMethod   PaymentMethod @default(ACH)
-  referenceNumber String?
-  createdBy       String        @default("System")
-  companyId       String?
-  company         Company?      @relation(fields: [companyId], references: [id])
-  lease           Lease         @relation(fields: [leaseId], references: [id])
-  property        Property      @relation(fields: [propertyId], references: [id])
-  tenant          Tenant        @relation(fields: [tenantId], references: [id])
-  unit            Unit          @relation(fields: [unitId], references: [id])
-
-  @@index([companyId], map: "rent_payments_companyId_fkey")
-  @@index([leaseId], map: "rent_payments_leaseId_fkey")
-  @@index([propertyId], map: "rent_payments_propertyId_fkey")
-  @@index([tenantId], map: "rent_payments_tenantId_fkey")
-  @@index([unitId], map: "rent_payments_unitId_fkey")
-  @@map("rent_payments")
-}
-
-model CoAAccount {
-  id           String             @id @default(uuid())
-  accountCode  String             @unique
-  accountName  String
-  type         String
-  subType      String?
-  balance      Float              @default(0)
-  isActive     Boolean            @default(true)
-  companyId    String?
-  company      Company?           @relation(fields: [companyId], references: [id])
-  journalLines JournalEntryLine[]
-
-  @@index([companyId], map: "coa_accounts_companyId_fkey")
-  @@map("coa_accounts")
-}
-
-model JournalEntry {
-  id          String             @id @default(uuid())
-  entryNumber String             @unique
-  date        DateTime
-  description String             @db.Text
-  reference   String?
-  companyId   String?
-  company     Company?           @relation(fields: [companyId], references: [id])
-  lines       JournalEntryLine[]
-
-  @@index([companyId], map: "journal_entries_companyId_fkey")
-  @@map("journal_entries")
-}
-
-model JournalEntryLine {
-  id             String       @id @default(uuid())
-  journalEntryId String
-  accountId      String
-  debit          Float        @default(0)
-  credit         Float        @default(0)
-  account        CoAAccount   @relation(fields: [accountId], references: [id])
-  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
-
-  @@index([accountId], map: "journal_entry_lines_accountId_fkey")
-  @@index([journalEntryId], map: "journal_entry_lines_journalEntryId_fkey")
-  @@map("journal_entry_lines")
-}
-
-model Vendor {
-  id          String      @id @default(uuid())
+model vendors {
+  id          String        @id
   companyName String
   contactName String
   email       String
   phone       String
   serviceType String
-  rating      Float       @default(5)
+  rating      Float         @default(5)
   companyId   String?
-  company     Company?    @relation(fields: [companyId], references: [id])
-  workOrders  WorkOrder[]
+  companies   companies?    @relation(fields: [companyId], references: [id])
+  work_orders work_orders[]
 
   @@index([companyId], map: "vendors_companyId_fkey")
-  @@map("vendors")
 }
 
-model WorkOrder {
-  id              String             @id @default(uuid())
+model violations {
+  id          String     @id
+  unitId      String
+  title       String
+  description String     @db.Text
+  fineAmount  Float      @default(0)
+  status      String     @default("Open")
+  createdAt   DateTime   @default(now())
+  companyId   String?
+  companies   companies? @relation(fields: [companyId], references: [id])
+  units       units      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "violations_companyId_fkey")
+  @@index([unitId], map: "violations_unitId_fkey")
+}
+
+model work_orders {
+  id              String               @id
   propertyId      String
   title           String
-  description     String             @db.Text
+  description     String               @db.Text
   vendorId        String?
-  priority        Priority           @default(Normal)
-  status          work_orders_status @default(Open)
+  priority        work_orders_priority @default(Normal)
+  status          work_orders_status   @default(Open)
   estimatedCost   Float?
   actualCost      Float?
-  createdAt       DateTime           @default(now())
-  rejectReason    String?            @db.Text
-  resolutionNotes String?            @db.Text
+  rejectReason    String?              @db.Text
+  resolutionNotes String?              @db.Text
+  createdAt       DateTime             @default(now())
   companyId       String?
-  company         Company?           @relation(fields: [companyId], references: [id])
-  property        Property           @relation(fields: [propertyId], references: [id])
-  vendor          Vendor?            @relation(fields: [vendorId], references: [id])
+  companies       companies?           @relation(fields: [companyId], references: [id])
+  properties      properties           @relation(fields: [propertyId], references: [id])
+  vendors         vendors?             @relation(fields: [vendorId], references: [id])
 
   @@index([companyId], map: "work_orders_companyId_fkey")
   @@index([propertyId], map: "work_orders_propertyId_fkey")
   @@index([vendorId], map: "work_orders_vendorId_fkey")
-  @@map("work_orders")
 }
 
-model OwnerDistribution {
-  id            String   @id @default(uuid())
-  ownerId       String
-  period        String
-  amount        Float
-  status        String   @default("Completed")
-  processedDate DateTime @default(now())
-  owner         Owner    @relation(fields: [ownerId], references: [id])
-
-  @@index([ownerId], map: "owner_distributions_ownerId_fkey")
-  @@map("owner_distributions")
+enum inspections_status {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
 }
 
-model AuditLog {
-  id        String   @id @default(uuid())
-  timestamp DateTime @default(now())
-  userId    String?
-  action    String
-  module    String
-  object    String
-  ip        String
-  status    String   @default("Success")
-  user      User?    @relation(fields: [userId], references: [id])
-
-  @@index([userId], map: "audit_logs_userId_idx")
-  @@map("audit_logs")
+enum inspection_templates_type {
+  MOVE_IN
+  MOVE_OUT
+  ROUTINE
+  INSPECTION_ASSIGN
 }
 
-model Announcement {
-  id        String   @id @default(uuid())
-  title     String
-  content   String   @db.Text
-  category  String   @default("General")
-  author    String   @default("Property Management")
-  isPinned  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
-
-  @@index([companyId], map: "announcements_companyId_fkey")
-  @@map("announcements")
-}
-
-model InsurancePolicy {
-  id             String   @id @default(uuid())
-  tenantId       String
-  policyNumber   String
-  provider       String
-  coverageAmount Float
-  startDate      DateTime
-  endDate        DateTime
-  status         String   @default("Active")
-  createdAt      DateTime @default(now())
-  companyId      String?
-  company        Company? @relation(fields: [companyId], references: [id])
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([companyId], map: "insurance_policies_companyId_fkey")
-  @@index([tenantId], map: "insurance_policies_tenantId_fkey")
-  @@map("insurance_policies")
-}
-
-model Promotion {
-  id        String   @id @default(uuid())
-  code      String   @unique
-  discount  String
-  duration  String
-  used      Int      @default(0)
-  maxUses   Int      @default(100)
-  status    String   @default("Active")
-  createdAt DateTime @default(now())
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
-
-  @@index([companyId], map: "promotions_companyId_fkey")
-  @@map("promotions")
-}
-
-model Notification {
-  id        String   @id @default(uuid())
-  userId    String?
-  title     String
-  message   String   @db.Text
-  type      String   @default("info")
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
-
-  @@index([companyId], map: "notifications_companyId_fkey")
-  @@map("notifications")
-}
-
-model Document {
-  id         String   @id @default(uuid())
-  name       String
-  category   String   @default("General")
-  fileUrl    String
-  fileSize   String   @default("1.2 MB")
-  uploadedBy String   @default("Property Manager")
-  createdAt  DateTime @default(now())
-  companyId  String?
-  company    Company? @relation(fields: [companyId], references: [id])
-
-  @@index([companyId], map: "documents_companyId_fkey")
-  @@map("documents")
-}
-
-model AiChatLog {
-  id        String   @id @default(uuid())
-  userId    String?
-  prompt    String   @db.Text
-  response  String   @db.Text
-  createdAt DateTime @default(now())
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
-
-  @@index([companyId], map: "ai_chat_logs_companyId_fkey")
-  @@map("ai_chat_logs")
-}
-
-model BankAccount {
-  id            String   @id @default(uuid())
-  name          String
-  institution   String
-  accountNumber String
-  balance       Float    @default(0)
-  type          String
-  status        String   @default("Active")
-  createdAt     DateTime @default(now())
-  companyId     String?
-  company       Company? @relation(fields: [companyId], references: [id])
-
-  @@index([companyId], map: "bank_accounts_companyId_fkey")
-  @@map("bank_accounts")
-}
-
-model SubscriptionPlan {
-  id           String   @id @default(uuid())
-  planName     String
-  price        Float
-  billingCycle String
-  nextInvoice  DateTime
-  usageLimit   String
-  createdAt    DateTime @default(now())
-
-  @@map("subscription_plans")
-}
-
-model SecurityPolicy {
-  id             String  @id @default(uuid())
-  mfaRequired    Boolean @default(true)
-  sessionTimeout Int     @default(30)
-  passwordPolicy String  @default("Strong")
-  ipWhitelist    String  @default("192.168.1.0/24")
-
-  @@map("security_policies")
-}
-
-model PaymentPlan {
-  id          String   @id @default(uuid())
-  tenantId    String
-  totalAmount Float
-  frequency   String
-  status      String   @default("Active")
-  createdAt   DateTime @default(now())
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId], map: "payment_plans_tenantId_fkey")
-  @@map("payment_plans")
-}
-
-model CrmLead {
-  id            String   @id @default(uuid())
-  name          String
-  email         String
-  phone         String
-  source        String
-  status        String   @default("New")
-  createdAt     DateTime @default(now())
-  assignedAgent String?
-  budget        Float?
-  companyId     String?
-  moveInDate    String?
-  notes         String?  @db.Text
-  priority      String?  @default("Medium")
-  property      String?
-
-  @@map("crm_leads")
-}
-
-model ScreeningReport {
-  id           String   @id @default(uuid())
-  tenantId     String
-  creditScore  Int
-  criminalPass Boolean  @default(true)
-  evictionPass Boolean  @default(true)
-  status       String   @default("Approved")
-  createdAt    DateTime @default(now())
-  companyId    String?
-  company      Company? @relation(fields: [companyId], references: [id])
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([companyId], map: "screening_reports_companyId_fkey")
-  @@index([tenantId], map: "screening_reports_tenantId_fkey")
-  @@map("screening_reports")
-}
-
-model Violation {
-  id          String   @id @default(uuid())
-  unitId      String
-  title       String
-  description String   @db.Text
-  fineAmount  Float    @default(0)
-  status      String   @default("Open")
-  createdAt   DateTime @default(now())
-  companyId   String?
-  company     Company? @relation(fields: [companyId], references: [id])
-  unit        Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
-
-  @@index([companyId], map: "violations_companyId_fkey")
-  @@index([unitId], map: "violations_unitId_fkey")
-  @@map("violations")
-}
-
-model Application {
-  id            String   @id @default(uuid())
-  tenantName    String
-  email         String
-  propertyName  String
-  unitNumber    String
-  status        String   @default("Pending")
-  submittedDate DateTime @default(now())
-  rentProposed  Float
-  createdAt     DateTime @default(now())
-  companyId     String?
-  company       Company? @relation(fields: [companyId], references: [id])
-
-  @@index([companyId], map: "applications_companyId_fkey")
-  @@map("applications")
-}
-
-model Invoice {
-  id           String   @id @default(uuid())
-  tenantId     String
-  tenantName   String
-  propertyId   String
-  propertyName String
-  unitNumber   String   @default("")
-  dueDate      String
-  amount       Float
-  paidAmount   Float    @default(0)
-  balance      Float
-  status       String   @default("Draft")
-  lineItems    String   @db.Text
-  notes        String?  @db.Text
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  companyId    String?
-  company      Company? @relation(fields: [companyId], references: [id])
-  tenant       Tenant   @relation(fields: [tenantId], references: [id])
-
-  @@index([companyId], map: "invoices_companyId_fkey")
-  @@index([tenantId], map: "invoices_tenantId_fkey")
-  @@map("invoices")
-}
-
-model ServiceRequest {
-  id                 String   @id @default(uuid())
-  title              String
-  description        String   @db.Text
-  propertyId         String
-  propertyName       String
-  unitNumber         String   @default("")
-  tenantId           String?
-  tenantName         String
-  priority           String   @default("Normal")
-  status             String   @default("New")
-  category           String   @default("General")
-  assignedVendorId   String?
-  assignedVendorName String?
-  assignedTechnician String?
-  estimatedCost      Float?
-  cost               Float?
-  scheduledDate      String?
-  notes              String?  @db.Text
-  messages           String   @db.Text
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  companyId          String?
-  company            Company? @relation(fields: [companyId], references: [id])
-
-  @@index([companyId], map: "service_requests_companyId_fkey")
-  @@map("service_requests")
-}
-
-model Company {
-  id                  String               @id @default(uuid())
-  name                String
-  code                String               @unique
-  contactName         String
-  email               String               @unique
-  phone               String
-  planName            String               @default("Pro Plan")
-  storageUsed         String               @default("1.2 GB")
-  status              String               @default("Active")
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  aiChatLogs          AiChatLog[]
-  announcements       Announcement[]
-  applications        Application[]
-  bankAccounts        BankAccount[]
-  coaAccounts         CoAAccount[]
-  users               CompanyUser[]
-  documents           Document[]
-  inspectionTemplates InspectionTemplate[]
-  inspections         Inspection[]
-  insurancePolicies   InsurancePolicy[]
-  invoicesPm          Invoice[]
-  journalEntries      JournalEntry[]
-  leases              Lease[]
-  moveIns             MoveIn[]
-  moveOuts            MoveOut[]
-  notifications       Notification[]
-  owners              Owner[]
-  promotions          Promotion[]
-  properties          Property[]
-  payments            RentPayment[]
-  invoices            SaaSInvoice[]
-  reports             ScreeningReport[]
-  serviceReqs         ServiceRequest[]
-  staff               StaffProfile[]
-  tenants             Tenant[]
-  portalUsers         User[]
-  vendors             Vendor[]
-  violations          Violation[]
-  workOrders          WorkOrder[]
-  ownerDocuments      OwnerDocument[]
-  tenantDocuments     TenantDocument[]
-  roles               Role[]
-
-  @@map("companies")
-}
-
-model CompanyUser {
-  id        String   @id @default(uuid())
-  companyId String
-  name      String
-  email     String   @unique
-  role      String   @default("Admin")
-  status    String   @default("Active")
-  createdAt DateTime @default(now())
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@index([companyId], map: "company_users_companyId_fkey")
-  @@map("company_users")
-}
-
-model SaaSPlan {
-  id            String   @id @default(uuid())
-  name          String   @unique
-  price         Float
-  billingCycle  String   @default("Monthly")
-  maxProperties Int      @default(50)
-  maxUnits      Int      @default(500)
-  features      String   @db.Text
-  createdAt     DateTime @default(now())
-
-  @@map("saas_plans")
-}
-
-model SaaSInvoice {
-  id          String    @id @default(uuid())
-  companyId   String
-  companyName String
-  amount      Float
-  status      String    @default("Paid")
-  dueDate     DateTime
-  paidDate    DateTime?
-  createdAt   DateTime  @default(now())
-  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@index([companyId], map: "saas_invoices_companyId_fkey")
-  @@map("saas_invoices")
-}
-
-model PlatformSetting {
-  id        String   @id @default(uuid())
-  key       String   @unique
-  value     String   @db.Text
-  updatedAt DateTime @updatedAt
-
-  @@map("platform_settings")
-}
-
-model OwnerDocument {
-  id         String   @id @default(uuid())
-  name       String
-  category   String   @default("Statements")
-  size       String   @default("1.2 MB")
-  uploadedAt DateTime @default(now())
-  fileUrl    String?
-  companyId  String?
-  ownerId    String?
-  propertyId String?
-  company    Company? @relation(fields: [companyId], references: [id])
-
-  @@index([companyId], map: "owner_documents_companyId_fkey")
-  @@map("owner_documents")
-}
-
-model OwnerMessage {
-  id        String   @id @default(uuid())
-  sender    String
-  recipient String
-  subject   String
-  body      String   @db.Text
-  createdAt DateTime @default(now())
-
-  @@map("owner_messages")
-}
-
-model TenantDocument {
-  id         String   @id @default(uuid())
-  name       String
-  category   String   @default("Leasing")
-  size       String   @default("1.5 MB")
-  uploadedAt DateTime @default(now())
-  fileUrl    String?
-  buildingId String?
-  companyId  String?
-  propertyId String?
-  tenantId   String?
-  unitId     String?
-  company    Company? @relation(fields: [companyId], references: [id])
-
-  @@index([companyId], map: "tenant_documents_companyId_fkey")
-  @@map("tenant_documents")
-}
-
-model TenantMessage {
-  id        String   @id @default(uuid())
-  sender    String
-  recipient String
-  subject   String
-  body      String   @db.Text
-  createdAt DateTime @default(now())
-
-  @@map("tenant_messages")
-}
-
-model TenantNotification {
-  id        String   @id @default(uuid())
-  title     String
-  message   String   @db.Text
-  type      String   @default("info")
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  @@map("tenant_notifications")
-}
-
-model StaffProfile {
-  id                 String   @id @default(uuid())
-  name               String   @default("Marcus Vance")
-  specialist         String   @default("Senior Maintenance Lead")
-  email              String   @unique @default("marcus.vance@apexpm.com")
-  phone              String   @default("(512) 555-0199")
-  role               String   @default("Maintenance Staff")
-  assignedProperties String   @default("Sunset Villas, Apex Heights, Lakeside")
-  joinedDate         String   @default("January 15th, 2025")
-  isAvailable        Boolean  @default(true)
-  completedJobs      Int      @default(142)
-  avgResponseTime    String   @default("38 Min")
-  customerRating     String   @default("4.92 / 5.0")
-  createdAt          DateTime @default(now())
-  companyId          String?
-  company            Company? @relation(fields: [companyId], references: [id])
-
-  @@index([companyId], map: "staff_profiles_companyId_fkey")
-  @@map("staff_profiles")
-}
-
-model Charge {
-  id        String   @id @default(uuid())
-  tenantId  String
-  title     String
-  amount    Float
-  status    String   @default("Active")
-  createdAt DateTime @default(now())
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId], map: "charges_tenantId_fkey")
-  @@map("charges")
-}
-
-model Deposit {
-  id        String   @id @default(uuid())
-  tenantId  String
-  amount    Float
-  status    String   @default("Held")
-  createdAt DateTime @default(now())
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId], map: "deposits_tenantId_fkey")
-  @@map("deposits")
-}
-
-model Expense {
-  id          String   @id @default(uuid())
-  category    String
-  amount      Float
-  date        DateTime @default(now())
-  description String   @db.Text
-  createdAt   DateTime @default(now())
-
-  @@map("expenses")
-}
-
-model MaintenanceRequest {
-  id           String   @id @default(uuid())
-  title        String
-  description  String   @db.Text
-  propertyName String
-  unitNumber   String
-  priority     String   @default("Normal")
-  status       String   @default("New")
-  createdAt    DateTime @default(now())
-
-  @@map("maintenance_requests")
-}
-
-model MoveIn {
-  id            String       @id @default(uuid())
-  leaseId       String       @unique
-  unitId        String
-  scheduledDate DateTime
-  completedDate DateTime?
-  status        MoveInStatus @default(SCHEDULED)
-  notes         String?      @db.Text
-  createdBy     String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  companyId     String?
-  inspections   Inspection[]
-  company       Company?     @relation(fields: [companyId], references: [id])
-  lease         Lease        @relation(fields: [leaseId], references: [id], onDelete: Cascade)
-  unit          Unit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
-
-  @@index([companyId], map: "move_ins_companyId_fkey")
-  @@index([unitId], map: "move_ins_unitId_fkey")
-  @@map("move_ins")
-}
-
-model MoveOut {
-  id             String                 @id @default(uuid())
-  leaseId        String                 @unique
-  unitId         String
-  scheduledDate  DateTime
-  completedDate  DateTime?
-  status         MoveOutStatus          @default(SCHEDULED)
-  notes          String?                @db.Text
-  cancelReason   String?                @db.Text
-  cancelledBy    String?
-  cancelledAt    DateTime?
-  createdBy      String?
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
-  companyId      String?
-  damageItems    DamageReviewItem[]
-  inspections    Inspection[]
-  depositSummary MoveOutDepositSummary?
-  company        Company?               @relation(fields: [companyId], references: [id])
-  lease          Lease                  @relation(fields: [leaseId], references: [id], onDelete: Cascade)
-  unit           Unit                   @relation(fields: [unitId], references: [id], onDelete: Cascade)
-
-  @@index([companyId], map: "move_outs_companyId_fkey")
-  @@index([unitId], map: "move_outs_unitId_fkey")
-  @@map("move_outs")
-}
-
-model DamageReviewItem {
-  id               String              @id @default(uuid())
-  moveOutId        String
-  inspectionItemId String
-  roomName         String
-  itemLabel        String
-  condition        InspectionCondition
-  notes            String?             @db.Text
-  decision         DamageDecision?
-  chargeAmount     Float?
-  reviewedBy       String?
-  reviewedAt       DateTime?
-  createdAt        DateTime            @default(now())
-  moveOut          MoveOut             @relation(fields: [moveOutId], references: [id], onDelete: Cascade)
-
-  @@index([moveOutId], map: "damage_review_items_moveOutId_fkey")
-  @@map("damage_review_items")
-}
-
-model MoveOutDepositSummary {
-  id              String    @id @default(uuid())
-  moveOutId       String    @unique
-  originalDeposit Float
-  totalCharges    Float     @default(0)
-  refundAmount    Float     @default(0)
-  notes           String?   @db.Text
-  approvedBy      String?
-  approvedAt      DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  moveOut         MoveOut   @relation(fields: [moveOutId], references: [id], onDelete: Cascade)
-
-  @@map("move_out_deposit_summaries")
-}
-
-model InspectionTemplate {
-  id          String                   @id @default(uuid())
-  name        String
-  type        InspectionTemplateType   @default(MOVE_IN)
-  description String?                  @db.Text
-  active      Boolean                  @default(true)
-  createdBy   String?
-  createdAt   DateTime                 @default(now())
-  companyId   String?
-  rooms       InspectionTemplateRoom[]
-  company     Company?                 @relation(fields: [companyId], references: [id])
-
-  @@index([companyId], map: "inspection_templates_companyId_fkey")
-  @@map("inspection_templates")
-}
-
-model InspectionTemplateRoom {
-  id         String                   @id @default(uuid())
-  templateId String
-  name       String
-  sortOrder  Int                      @default(0)
-  items      InspectionTemplateItem[]
-  template   InspectionTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-  @@index([templateId], map: "inspection_template_rooms_templateId_fkey")
-  @@map("inspection_template_rooms")
-}
-
-model InspectionTemplateItem {
-  id        String                 @id @default(uuid())
-  roomId    String
-  label     String
-  required  Boolean                @default(false)
-  sortOrder Int                    @default(0)
-  room      InspectionTemplateRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
-
-  @@index([roomId], map: "inspection_template_items_roomId_fkey")
-  @@map("inspection_template_items")
-}
-
-model Inspection {
-  id                  String           @id @default(uuid())
-  status              InspectionStatus @default(DRAFT)
-  createdAt           DateTime         @default(now())
-  assignedAt          DateTime?
-  assignedBy          String?
-  assignedInspectorId String?
-  cancelReason        String?          @db.Text
-  cancelledAt         DateTime?
-  cancelledBy         String?
-  companyId           String?
-  completedAt         DateTime?
-  createdBy           String?
-  inspectionNumber    String           @unique
-  inspectorSignature  String?          @db.Text
-  inspectorSignedAt   DateTime?
-  managerNotes        String?          @db.Text
-  moveInId            String?
-  moveOutId           String?
-  overallNotes        String?          @db.Text
-  startedAt           DateTime         @default(now())
-  templateId          String?
-  templateName        String
-  templateVersion     Int              @default(1)
-  tenantSignature     String?          @db.Text
-  tenantSignedAt      DateTime?
-  type                InspectionType   @default(MOVE_IN)
-  updatedAt           DateTime         @updatedAt
-  rooms               InspectionRoom[]
-  assignedInspector   User?            @relation("InspectorRelation", fields: [assignedInspectorId], references: [id])
-  company             Company?         @relation(fields: [companyId], references: [id])
-  moveIn              MoveIn?          @relation(fields: [moveInId], references: [id], onDelete: Cascade)
-  moveOut             MoveOut?         @relation(fields: [moveOutId], references: [id], onDelete: Cascade)
-
-  @@index([assignedInspectorId], map: "inspections_assignedInspectorId_fkey")
-  @@index([companyId], map: "inspections_companyId_fkey")
-  @@index([moveInId], map: "inspections_moveInId_fkey")
-  @@index([moveOutId], map: "inspections_moveOutId_fkey")
-  @@map("inspections")
-}
-
-model InspectionRoom {
-  id           String           @id @default(uuid())
-  inspectionId String
-  name         String
-  sortOrder    Int              @default(0)
-  items        InspectionItem[]
-  inspection   Inspection       @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
-
-  @@index([inspectionId], map: "inspection_rooms_inspectionId_fkey")
-  @@map("inspection_rooms")
-}
-
-model InspectionItem {
-  id        String               @id @default(uuid())
-  roomId    String
-  label     String
-  required  Boolean              @default(false)
-  sortOrder Int                  @default(0)
-  condition InspectionCondition?
-  notes     String?              @db.Text
-  completed Boolean              @default(false)
-  room      InspectionRoom       @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  photos    InspectionPhoto[]
-
-  @@index([roomId], map: "inspection_items_roomId_fkey")
-  @@map("inspection_items")
-}
-
-model InspectionPhoto {
-  id         String         @id @default(uuid())
-  itemId     String
-  url        String         @db.Text
-  caption    String?
-  sortOrder  Int            @default(0)
-  uploadedBy String?
-  createdAt  DateTime       @default(now())
-  item       InspectionItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-
-  @@index([itemId], map: "inspection_photos_itemId_fkey")
-  @@map("inspection_photos")
-}
-
-model Income {
-  id          String   @id @default(uuid())
-  category    String
-  amount      Float
-  date        DateTime @default(now())
-  description String   @db.Text
-  status      String   @default("Cleared")
-  createdAt   DateTime @default(now())
-
-  @@map("incomes")
-}
-
-model Signature {
-  id             String   @id @default(uuid())
-  documentName   String
-  documentId     String
-  recipientName  String
-  recipientEmail String
-  status         String   @default("Sent")
-  sentAt         DateTime @default(now())
-  expiresAt      DateTime @default(now())
-  createdAt      DateTime @default(now())
-
-  @@map("signatures")
-}
-
-enum PropertyType {
+enum properties_type {
   Apartment
   Commercial
   SingleFamily
@@ -1114,56 +1052,21 @@ enum PropertyType {
   HOA
 }
 
-enum UnitStatus {
-  Occupied
-  Vacant
-  Reserved
-  UnderMaintenance
-  Vacant_Needs_Preparation
+enum damage_review_items_condition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
 }
 
-enum TenantStatus {
-  Active
-  Inactive
-  Pending
+enum inspection_items_condition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
 }
 
-enum LeaseStatus {
-  Draft
-  Pending_Move_In @map("Pending Move In")
-  Active
-  Pending
-  Expired
-  Terminated
-  Ended
-  Cancelled
-}
-
-enum PaymentStatus {
-  Pending
-  Paid
-  PartiallyPaid
-  Failed
-  Refunded
-  Voided
-}
-
-enum PaymentMethod {
-  ACH
-  CreditCard
-  BankTransfer
-  Cash
-  Check
-}
-
-enum Priority {
-  Low
-  Normal
-  High
-  Emergency
-}
-
-enum MoveInStatus {
+enum move_ins_status {
   SCHEDULED
   INSPECTION_PENDING
   INSPECTION_IN_PROGRESS
@@ -1172,35 +1075,7 @@ enum MoveInStatus {
   CANCELLED
 }
 
-enum InspectionStatus {
-  DRAFT
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-}
-
-enum InspectionCondition {
-  EXCELLENT
-  GOOD
-  FAIR
-  POOR
-}
-
-enum InspectionTemplateType {
-  MOVE_IN
-  MOVE_OUT
-  ROUTINE
-  INSPECTION_ASSIGN
-}
-
-enum InspectionType {
-  MOVE_IN
-  MOVE_OUT
-  ROUTINE
-  INSPECTION_ASSIGN
-}
-
-enum MoveOutStatus {
+enum move_outs_status {
   SCHEDULED
   INSPECTION_PENDING
   INSPECTION_IN_PROGRESS
@@ -1211,10 +1086,17 @@ enum MoveOutStatus {
   CANCELLED
 }
 
-enum DamageDecision {
-  CHARGE_TENANT
-  NO_CHARGE
-  MAINTENANCE_REPAIR
+enum work_orders_priority {
+  Low
+  Normal
+  High
+  Emergency
+}
+
+enum tenants_status {
+  Active
+  Inactive
+  Pending
 }
 
 enum work_orders_status {
@@ -1242,4 +1124,53 @@ model ReportExport {
   updatedAt    DateTime @updatedAt
 
   @@map("report_exports")
+}
+
+enum damage_review_items_decision {
+  CHARGE_TENANT
+  NO_CHARGE
+  MAINTENANCE_REPAIR
+}
+
+enum leases_status {
+  Draft
+  Pending_Move_In @map("Pending Move In")
+  Active
+  Pending
+  Expired
+  Terminated
+  Ended
+  Cancelled
+}
+
+enum rent_payments_status {
+  Pending
+  Paid
+  PartiallyPaid
+  Failed
+  Refunded
+  Voided
+}
+
+enum rent_payments_paymentMethod {
+  ACH
+  CreditCard
+  BankTransfer
+  Cash
+  Check
+}
+
+enum units_status {
+  Occupied
+  Vacant
+  Reserved
+  UnderMaintenance
+  Vacant_Needs_Preparation
+}
+
+enum inspections_type {
+  MOVE_IN
+  MOVE_OUT
+  ROUTINE
+  INSPECTION_ASSIGN
 }
