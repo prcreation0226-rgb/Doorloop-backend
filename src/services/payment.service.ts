@@ -153,9 +153,8 @@ export class PaymentService {
         },
       });
 
-      // Update tenant unpaid invoices
       const unpaidInvoices = await tx.invoice.findMany({
-        where: { tenantId, status: { in: ['Sent', 'Overdue', 'Partially Paid'] } },
+        where: { tenantId, status: { in: ['Sent', 'Overdue', 'Partially Paid', 'Unpaid', 'Draft'] } },
         orderBy: { dueDate: 'asc' },
       });
 
