@@ -27,7 +27,7 @@ export function rbacGuard(moduleName: string, action: CapabilityAction) {
       const permission = await prisma.permission.findFirst({
         where: {
           roleId,
-          module: { equals: moduleName, mode: 'insensitive' }
+          module: moduleName
         }
       });
 

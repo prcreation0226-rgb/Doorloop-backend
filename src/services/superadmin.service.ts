@@ -99,9 +99,6 @@ export class SuperAdminService {
     const whereClause: any = {};
     if (companyId) {
       whereClause.companyId = companyId;
-      whereClause.role = {
-        in: ['Maintenance Staff', 'Collection Manager', 'Maintenance'],
-      };
     }
 
     const companyUsers = await prisma.companyUser.findMany({

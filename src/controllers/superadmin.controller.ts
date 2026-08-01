@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { superAdminService } from '../services/superadmin.service';
 import { sendSuccess } from '../utils/apiResponse';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
+import prisma from '../config/database';
 
 export class SuperAdminController {
   // Companies
@@ -56,7 +57,13 @@ export class SuperAdminController {
   // Company Users
   async getCompanyUsers(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const companyId = req.user?.companyId;
+      let companyId = req.user?.companyId;
+      if (!companyId && req.user?.email) {
+        const dbUser = await prisma.user.findFirst({
+          where: { email: req.user.email },
+        });
+        companyId = dbUser?.companyId || undefined;
+      }
       console.log('DEBUG: getCompanyUsers - req.user:', req.user, 'companyId:', companyId);
       const list = await superAdminService.getCompanyUsers(companyId);
       return sendSuccess({ res, data: list });
