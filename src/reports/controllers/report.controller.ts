@@ -65,8 +65,9 @@ export class ReportController {
   async getProfitLoss(req: Request, res: Response, next: NextFunction) {
     try {
       const user = (req as any).user;
-      // RBAC check: Only Admins and Accountants can view financial statements
-      if (user.role !== 'Admin' && user.role !== 'Accountant' && user.role !== 'SuperAdmin') {
+      const userRole = user.roleName || user.role;
+      // RBAC check: Only Admins, Accountants, and Property Managers can view financial statements
+      if (userRole !== 'Admin' && userRole !== 'Accountant' && userRole !== 'SuperAdmin' && userRole !== 'Property Manager') {
         res.status(403).json({ message: 'Forbidden. You do not have permission to view financial statements.' });
         return;
       }

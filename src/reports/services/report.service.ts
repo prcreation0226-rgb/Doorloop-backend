@@ -15,8 +15,8 @@ export class ReportService {
       throw new AppError('Unauthorized access.', 401, 'UNAUTHORIZED');
     }
 
-    // Admins or Accountants get access to all properties in the company
-    if (user.role === 'Admin' || user.role === 'Accountant' || user.role === 'SuperAdmin') {
+    const userRole = user.roleName || user.role;
+    if (userRole === 'Admin' || userRole === 'Accountant' || userRole === 'SuperAdmin' || userRole === 'Property Manager') {
       const properties = await prisma.property.findMany({
         where: { companyId },
         select: { id: true },
