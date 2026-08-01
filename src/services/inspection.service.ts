@@ -174,6 +174,7 @@ export class InspectionService {
       }
       if (data.status) updateData.status = data.status;
 
+      let templateChanged = false;
       if (data.templateId && data.templateId !== inspection.templateId) {
         const template = await tx.inspectionTemplate.findFirst({
           where: { id: data.templateId, ...(companyId ? { companyId } : {}) },
@@ -186,6 +187,7 @@ export class InspectionService {
         if (template) {
           updateData.templateId = template.id;
           updateData.templateName = template.name;
+          templateChanged = true;
           
           // Clean existing checklist rooms & items (database cascade handles items)
           await tx.inspectionRoom.deleteMany({ where: { inspectionId: id } });
@@ -221,7 +223,7 @@ export class InspectionService {
       });
 
       // Update room items
-      if (data.items && Array.isArray(data.items)) {
+      if (data.items && Array.isArray(data.items) && !templateChanged) {
         for (const item of data.items) {
           const itemUpdateData: any = {};
           if (item.condition !== undefined) itemUpdateData.condition = item.condition;
