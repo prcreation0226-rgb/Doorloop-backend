@@ -33,12 +33,16 @@ model User {
 
 model Role {
   id          String       @id @default(uuid())
-  name        String       @unique
+  name        String
   description String?      @db.Text
   isCustom    Boolean      @default(false)
+  companyId   String?
   permissions Permission[]
   users       User[]
+  company     Company?     @relation(fields: [companyId], references: [id])
 
+  @@unique([name, companyId])
+  @@index([companyId], map: "roles_companyId_fkey")
   @@map("roles")
 }
 
@@ -676,6 +680,7 @@ model Company {
   workOrders          WorkOrder[]
   ownerDocuments      OwnerDocument[]
   tenantDocuments     TenantDocument[]
+  roles               Role[]
 
   @@map("companies")
 }
