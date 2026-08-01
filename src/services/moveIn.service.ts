@@ -168,11 +168,12 @@ export class MoveInService {
         },
       });
 
-      // 4. Update Tenant status to Active
+      // 4. Update Tenant status to Active and assign unit
       await tx.tenant.update({
         where: { id: moveIn.lease.tenantId },
         data: {
           status: 'Active',
+          unitId: moveIn.unitId,
         },
       });
 
