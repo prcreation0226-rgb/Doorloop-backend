@@ -322,6 +322,9 @@ model WorkOrder {
   status          work_orders_status @default(Open)
   estimatedCost   Float?
   actualCost      Float?
+  labourCost      Float?
+  materialsCost   Float?
+  extraExpenses   Float?
   createdAt       DateTime           @default(now())
   rejectReason    String?            @db.Text
   resolutionNotes String?            @db.Text
