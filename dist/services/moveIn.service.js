@@ -161,11 +161,12 @@ class MoveInService {
                     status: 'Occupied',
                 },
             });
-            // 4. Update Tenant status to Active
+            // 4. Update Tenant status to Active and assign unit
             await tx.tenant.update({
                 where: { id: moveIn.lease.tenantId },
                 data: {
                     status: 'Active',
+                    unitId: moveIn.unitId,
                 },
             });
             const validUserId = await (0, auditHelper_1.getValidUserId)(userId, tx);

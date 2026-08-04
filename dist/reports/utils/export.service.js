@@ -63,9 +63,9 @@ class ExportService {
                     throw new Error(`Unknown report type: ${reportType}`);
             }
             // Simulate slight processing lag for large files
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-            if (data.length === 0) {
-                throw new Error('No records found to export');
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            if (!data || data.length === 0) {
+                data = [{ Status: 'No records found for specified date filters', Date: new Date().toISOString().split('T')[0] }];
             }
             // 2. Generate file content (CSV layout)
             const headers = Object.keys(data[0]);

@@ -337,15 +337,33 @@ class PortalController {
     // --- Helper to get properties assigned to the logged-in owner ---
     async getPropertiesForOwner(req) {
         const userEmail = req.user?.email;
-        if (!userEmail)
+        const companyId = req.user?.companyId;
+        let whereClause = {};
+        if (userEmail) {
+            const owner = await database_1.default.owner.findFirst({
+                where: companyId ? { email: userEmail, companyId } : { email: userEmail },
+            });
+            if (owner) {
+                whereClause.ownerId = owner.id;
+            }
+            else if (companyId) {
+                whereClause.companyId = companyId;
+            }
+            else {
+                return [];
+            }
+        }
+        else if (companyId) {
+            whereClause.companyId = companyId;
+        }
+        else {
             return [];
-        const owner = await database_1.default.owner.findFirst({
-            where: { email: userEmail },
-        });
-        if (!owner)
-            return [];
+        }
+        if (companyId) {
+            whereClause.companyId = companyId;
+        }
         return database_1.default.property.findMany({
-            where: { ownerId: owner.id },
+            where: whereClause,
             include: { units: true, buildings: true },
         });
     }
@@ -383,7 +401,9 @@ class PortalController {
             const companyId = req.user?.companyId;
             let owner = null;
             if (userEmail) {
-                owner = await database_1.default.owner.findFirst({ where: { email: userEmail } });
+                owner = await database_1.default.owner.findFirst({
+                    where: companyId ? { email: userEmail, companyId } : { email: userEmail },
+                });
             }
             const whereFilter = {};
             if (owner) {
@@ -446,28 +466,105 @@ class PortalController {
     }
     async getOwnerMaintenance(req, res, next) {
         try {
+            const companyId = req.user?.companyId;
             const properties = await this.getPropertiesForOwner(req);
             const propertyIds = properties.map((p) => p.id);
-            if (propertyIds.length === 0) {
+            let srWhere = {};
+            let woWhere = {};
+            if (propertyIds.length > 0) {
+                srWhere.propertyId = { in: propertyIds };
+                woWhere.propertyId = { in: propertyIds };
+            }
+            if (companyId) {
+                srWhere.companyId = companyId;
+                woWhere.companyId = companyId;
+            }
+            if (propertyIds.length === 0 && !companyId) {
                 return (0, apiResponse_1.sendSuccess)({ res, data: [] });
             }
-            const workOrders = await database_1.default.workOrder.findMany({
-                where: { propertyId: { in: propertyIds } },
-                include: { property: true },
-                orderBy: { createdAt: 'desc' },
+            const [serviceRequests, workOrders] = await Promise.all([
+                database_1.default.serviceRequest.findMany({
+                    where: srWhere,
+                    orderBy: { createdAt: 'desc' },
+                }),
+                database_1.default.workOrder.findMany({
+                    where: woWhere,
+                    include: { property: true },
+                    orderBy: { createdAt: 'desc' },
+                }),
+            ]);
+            const formattedSRs = serviceRequests.map((sr, idx) => {
+                const estCost = Number(sr.estimatedCost || 0);
+                const rawActual = Number(sr.cost || sr.actualCost || 0);
+                const rawExtra = Number(sr.extraCost || sr.extraExpenses || 0);
+                let actualCost = rawActual;
+                if (rawActual > 0 && rawActual < estCost) {
+                    actualCost = estCost + rawActual;
+                }
+                else if (rawActual === 0 && rawExtra > 0) {
+                    actualCost = estCost + rawExtra;
+                }
+                const extraCost = rawExtra > 0 ? rawExtra : Math.max(0, actualCost - estCost);
+                return {
+                    id: sr.id,
+                    requestNumber: `#SR-${1001 + idx}`,
+                    type: 'Service Request',
+                    title: sr.title || 'Maintenance Request',
+                    description: sr.description || '',
+                    propertyId: sr.propertyId,
+                    propertyName: sr.propertyName || 'Property',
+                    unitNumber: sr.unitNumber || 'Unassigned',
+                    tenantName: sr.tenantName || 'Resident',
+                    priority: sr.priority || 'Normal',
+                    status: sr.status || 'New',
+                    estimatedCost: estCost,
+                    actualCost: actualCost,
+                    cost: actualCost,
+                    extraCost: extraCost,
+                    date: sr.createdAt ? new Date(sr.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                    assignedVendorName: sr.assignedVendorName || sr.assignedTechnician || 'Unassigned',
+                };
             });
-            const formatted = workOrders.map((wo) => ({
-                id: wo.id,
-                title: wo.title,
-                propertyName: wo.property?.name || 'Property',
-                unitName: 'Unit',
-                priority: wo.priority || 'Normal',
-                status: wo.status || 'Open',
-                date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-                description: wo.description || '',
-                estimatedCost: wo.estimatedCost || 0,
-            }));
-            return (0, apiResponse_1.sendSuccess)({ res, data: formatted });
+            const formattedWOs = workOrders.map((wo, idx) => {
+                const estCost = Number(wo.estimatedCost || 0);
+                const rawActual = Number(wo.actualCost || wo.cost || 0);
+                const rawExtra = Number(wo.extraCost || wo.extraExpenses || 0);
+                let actualCost = rawActual;
+                if (rawActual > 0 && rawActual < estCost) {
+                    actualCost = estCost + rawActual;
+                }
+                else if (rawActual === 0 && rawExtra > 0) {
+                    actualCost = estCost + rawExtra;
+                }
+                const extraCost = rawExtra > 0 ? rawExtra : Math.max(0, actualCost - estCost);
+                return {
+                    id: wo.id,
+                    requestNumber: `#WO-${2001 + idx}`,
+                    type: 'Work Order',
+                    title: wo.title || 'Maintenance Work Order',
+                    description: wo.description || '',
+                    propertyId: wo.propertyId,
+                    propertyName: wo.property?.name || wo.propertyName || 'Property',
+                    unitNumber: wo.unitNumber || 'Unit',
+                    tenantName: wo.tenantName || 'Resident',
+                    priority: wo.priority || 'Normal',
+                    status: wo.status || 'Open',
+                    estimatedCost: estCost,
+                    actualCost: actualCost,
+                    cost: actualCost,
+                    extraCost: extraCost,
+                    date: wo.createdAt ? new Date(wo.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                    assignedVendorName: wo.vendorName || wo.assignedTechnician || 'Vendor',
+                };
+            });
+            const combined = [...formattedSRs];
+            formattedWOs.forEach((wo) => {
+                const exists = combined.some((sr) => sr.id === wo.id || sr.title === wo.title);
+                if (!exists) {
+                    combined.push(wo);
+                }
+            });
+            return (0, apiResponse_1.sendSuccess)({ res, data: combined });
         }
         catch (error) {
             next(error);
@@ -1498,8 +1595,11 @@ class PortalController {
                     where: { id },
                     data: {
                         ...(srStatus && { status: srStatus }),
-                        ...(computedCost !== undefined && { cost: computedCost }),
+                        ...(labourCost !== undefined ? { cost: parseFloat(String(labourCost)) } : (actualCost !== undefined && { cost: parseFloat(String(actualCost)) })),
+                        ...(labourCost !== undefined && labourCost !== null && { labourCost: parseFloat(String(labourCost)) }),
+                        ...(extraExpenses !== undefined && extraExpenses !== null && { extraExpenses: parseFloat(String(extraExpenses)) }),
                         ...(rejectReason && { notes: rejectReason }),
+                        ...(resolutionNotes && { notes: resolutionNotes }),
                     },
                 });
                 return (0, apiResponse_1.sendSuccess)({ res, data: updatedSr });
@@ -1511,7 +1611,7 @@ class PortalController {
                     where: { id },
                     data: {
                         ...(mappedStatus && { status: mappedStatus }),
-                        ...(computedCost !== undefined && { actualCost: computedCost }),
+                        ...(labourCost !== undefined ? { actualCost: parseFloat(String(labourCost)) } : (actualCost !== undefined && { actualCost: parseFloat(String(actualCost)) })),
                         ...(labourCost !== undefined && labourCost !== null && { labourCost: parseFloat(String(labourCost)) }),
                         ...(materialsCost !== undefined && materialsCost !== null && { materialsCost: parseFloat(String(materialsCost)) }),
                         ...(extraExpenses !== undefined && extraExpenses !== null && { extraExpenses: parseFloat(String(extraExpenses)) }),

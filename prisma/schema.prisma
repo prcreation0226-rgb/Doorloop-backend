@@ -33,7 +33,7 @@ model User {
 
 model Role {
   id          String       @id @default(uuid())
-  name        String
+  name        String       @unique
   description String?      @db.Text
   isCustom    Boolean      @default(false)
   permissions Permission[]

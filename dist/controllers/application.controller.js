@@ -20,6 +20,7 @@ class ApplicationController {
             next(error);
         }
     }
+    // check
     async create(req, res, next) {
         try {
             const { tenantName, email, propertyName, unitNumber, rentProposed, status, submittedDate } = req.body;

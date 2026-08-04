@@ -149,9 +149,8 @@ class PaymentService {
                     companyId: data.companyId || tenant?.companyId || property?.companyId,
                 },
             });
-            // Update tenant unpaid invoices
             const unpaidInvoices = await tx.invoice.findMany({
-                where: { tenantId, status: { in: ['Sent', 'Overdue', 'Partially Paid'] } },
+                where: { tenantId, status: { in: ['Sent', 'Overdue', 'Partially Paid', 'Unpaid', 'Draft'] } },
                 orderBy: { dueDate: 'asc' },
             });
             let remainingAmount = Number(data.amount);

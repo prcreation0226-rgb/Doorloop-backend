@@ -27,6 +27,8 @@ exports.prisma = prismaRaw.$extends({
                     'Invoice', 'RentPayment', 'WorkOrder', 'Announcement', 'Violation', 'ServiceRequest',
                     'CrmLead'
                 ];
+                // Models that require property relation-based companyId filtering
+                const modelsWithPropertyCompanyId = ['Unit', 'Building'];
                 const queryArgs = args;
                 if (modelsWithCompanyId.includes(model)) {
                     if (operation !== 'create' && operation !== 'createMany' && operation !== 'createManyAndReturn') {
@@ -57,6 +59,13 @@ exports.prisma = prismaRaw.$extends({
                             if (model === 'StaffProfile')
                                 queryArgs.where.id = staffId;
                         }
+                    }
+                }
+                else if (modelsWithPropertyCompanyId.includes(model)) {
+                    if (operation !== 'create' && operation !== 'createMany' && operation !== 'createManyAndReturn') {
+                        queryArgs.where = queryArgs.where || {};
+                        queryArgs.where.property = queryArgs.where.property || {};
+                        queryArgs.where.property.companyId = companyId;
                     }
                 }
                 // Automatically assign companyId on create

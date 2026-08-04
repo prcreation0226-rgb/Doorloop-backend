@@ -96,9 +96,6 @@ class SuperAdminService {
         const whereClause = {};
         if (companyId) {
             whereClause.companyId = companyId;
-            whereClause.role = {
-                in: ['Maintenance Staff', 'Collection Manager', 'Maintenance'],
-            };
         }
         const companyUsers = await database_1.default.companyUser.findMany({
             where: whereClause,
@@ -213,17 +210,10 @@ class SuperAdminService {
         return companyUser;
     }
     async updateCompanyUserStatus(id, status) {
-        const companyUser = await database_1.default.companyUser.update({
+        return database_1.default.companyUser.update({
             where: { id },
             data: { status },
         });
-        if (companyUser.email) {
-            await database_1.default.user.updateMany({
-                where: { email: companyUser.email },
-                data: { status },
-            });
-        }
-        return companyUser;
     }
     async deleteCompanyUser(id) {
         return database_1.default.companyUser.delete({

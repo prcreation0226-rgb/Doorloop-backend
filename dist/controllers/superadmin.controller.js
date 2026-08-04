@@ -1,8 +1,12 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.superAdminController = exports.SuperAdminController = void 0;
 const superadmin_service_1 = require("../services/superadmin.service");
 const apiResponse_1 = require("../utils/apiResponse");
+const database_1 = __importDefault(require("../config/database"));
 class SuperAdminController {
     // Companies
     async getCompanies(req, res, next) {
@@ -56,7 +60,13 @@ class SuperAdminController {
     // Company Users
     async getCompanyUsers(req, res, next) {
         try {
-            const companyId = req.user?.companyId;
+            let companyId = req.user?.companyId;
+            if (!companyId && req.user?.email) {
+                const dbUser = await database_1.default.user.findFirst({
+                    where: { email: req.user.email },
+                });
+                companyId = dbUser?.companyId || undefined;
+            }
             console.log('DEBUG: getCompanyUsers - req.user:', req.user, 'companyId:', companyId);
             const list = await superadmin_service_1.superAdminService.getCompanyUsers(companyId);
             return (0, apiResponse_1.sendSuccess)({ res, data: list });
