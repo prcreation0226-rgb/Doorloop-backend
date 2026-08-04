@@ -49,8 +49,8 @@ export class WorkOrderController {
       });
 
       const formattedServiceRequests = serviceRequests.map((sr: any, index: number) => {
-        const est = Number(sr.estimatedCost || sr.cost || 0);
-        const act = Number(sr.actualCost || sr.cost || est);
+        const est = Number(sr.estimatedCost || 0);
+        const act = Number(sr.labourCost || sr.cost || 0);
         return {
           id: sr.id,
           workOrderNumber: `SR-${1001 + index}`,
@@ -139,8 +139,8 @@ export class WorkOrderController {
             scheduledDate: sr.scheduledDate || new Date().toISOString().split('T')[0],
             priority: sr.priority || 'Normal',
             status: sr.status === 'Open' || sr.status === 'New' ? 'Open' : sr.status === 'InProgress' || sr.status === 'In Progress' ? 'In Progress' : sr.status === 'Completed' ? 'Completed' : sr.status === 'Closed' ? 'Closed' : sr.status === 'Rejected' ? 'Rejected' : sr.status === 'Assigned' ? 'Assigned' : sr.status || 'Open',
-            estimatedCost: sr.estimatedCost || sr.cost || 0,
-            actualCost: sr.cost || 0,
+            estimatedCost: sr.estimatedCost || 0,
+            actualCost: sr.labourCost || sr.cost || 0,
             extraExpenses: sr.extraExpenses || 0,
             labourCost: sr.labourCost || 0,
             title: sr.title,
