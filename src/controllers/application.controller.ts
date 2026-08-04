@@ -17,6 +17,9 @@ export class ApplicationController {
     }
   }
 
+
+  // check
+
   async create(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const { tenantName, email, propertyName, unitNumber, rentProposed, status, submittedDate } = req.body;
