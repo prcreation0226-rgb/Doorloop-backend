@@ -33,7 +33,7 @@ model User {
 
 model Role {
   id          String       @id @default(uuid())
-  name        String       @unique
+  name        String
   description String?      @db.Text
   isCustom    Boolean      @default(false)
   permissions Permission[]
@@ -621,6 +621,8 @@ model ServiceRequest {
   assignedTechnician String?
   estimatedCost      Float?
   cost               Float?
+  labourCost         Float?
+  extraExpenses      Float?
   scheduledDate      String?
   notes              String?  @db.Text
   messages           String   @db.Text

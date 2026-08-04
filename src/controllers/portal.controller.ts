@@ -1697,8 +1697,11 @@ export class PortalController {
           where: { id },
           data: {
             ...(srStatus && { status: srStatus }),
-            ...(computedCost !== undefined && { cost: computedCost }),
+            ...(labourCost !== undefined ? { cost: parseFloat(String(labourCost)) } : (actualCost !== undefined && { cost: parseFloat(String(actualCost)) })),
+            ...(labourCost !== undefined && labourCost !== null && { labourCost: parseFloat(String(labourCost)) }),
+            ...(extraExpenses !== undefined && extraExpenses !== null && { extraExpenses: parseFloat(String(extraExpenses)) }),
             ...(rejectReason && { notes: rejectReason }),
+            ...(resolutionNotes && { notes: resolutionNotes }),
           },
         });
         return sendSuccess({ res, data: updatedSr });
