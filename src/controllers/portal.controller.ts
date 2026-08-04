@@ -1711,7 +1711,7 @@ export class PortalController {
           where: { id },
           data: {
             ...(mappedStatus && { status: mappedStatus as any }),
-            ...(computedCost !== undefined && { actualCost: computedCost }),
+            ...(labourCost !== undefined ? { actualCost: parseFloat(String(labourCost)) } : (actualCost !== undefined && { actualCost: parseFloat(String(actualCost)) })),
             ...(labourCost !== undefined && labourCost !== null && { labourCost: parseFloat(String(labourCost)) }),
             ...(materialsCost !== undefined && materialsCost !== null && { materialsCost: parseFloat(String(materialsCost)) }),
             ...(extraExpenses !== undefined && extraExpenses !== null && { extraExpenses: parseFloat(String(extraExpenses)) }),
