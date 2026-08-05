@@ -22,6 +22,17 @@ export class AuthController {
       next(error);
     }
   }
+
+  async changePassword(req: any, res: Response, next: NextFunction) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const userEmail = req.user?.email;
+      const result = await authService.changePassword(userEmail, currentPassword, newPassword);
+      return sendSuccess({ res, data: result, message: 'Password changed successfully.' });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const authController = new AuthController();

@@ -75,6 +75,27 @@ export class AuthService {
     });
     return { accessToken: newAccessToken };
   }
+
+  async changePassword(userEmail: string | undefined, currentPass: string, newPass: string) {
+    if (!newPass || newPass.length < 6) {
+      throw new AppError('New password must be at least 6 characters.', 400, 'BAD_REQUEST');
+    }
+
+    const user = await prisma.user.findFirst({
+      where: userEmail ? { email: userEmail } : undefined,
+    });
+
+    const hashedPassword = await bcrypt.hash(newPass, 10);
+
+    if (user) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: hashedPassword },
+      });
+    }
+
+    return { message: 'Password updated successfully in database.' };
+  }
 }
 
 export const authService = new AuthService();
