@@ -57,7 +57,7 @@ prisma.$connect()
   });
 
 const server = app.listen(env.PORT, () => {
-  logger.info(`🚀 DoorLoop ERP Backend Server running on http://localhost:${env.PORT}${env.API_PREFIX}`);
+  logger.info(`🚀 WhatsLandlord ERP Backend Server running on http://localhost:${env.PORT}${env.API_PREFIX}`);
   logger.info(`Environment: ${env.NODE_ENV}`);
 });
 

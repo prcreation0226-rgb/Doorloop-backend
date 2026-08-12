@@ -1,4 +1,5 @@
 import prisma from '../config/database';
+import { authorizeNetService } from './authorizeNet.service';
 
 export class PaymentService {
   async getAllPayments(companyId?: string, user?: any) {
@@ -152,6 +153,8 @@ export class PaymentService {
           companyId: data.companyId || tenant?.companyId || property?.companyId,
         },
       });
+
+
 
       const unpaidInvoices = await tx.invoice.findMany({
         where: { tenantId, status: { in: ['Sent', 'Overdue', 'Partially Paid', 'Unpaid', 'Draft'] } },

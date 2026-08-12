@@ -16,7 +16,7 @@ export async function authMiddleware(req: AuthenticatedRequest, res: Response, n
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     payload = {
       userId: 'usr-1',
-      email: 'diya.jain@doorloop.com',
+      email: 'diya.jain@whatslandlord.com',
       roleId: 'role-cm',
       roleName: 'Collection Manager',
     };
@@ -29,7 +29,7 @@ export async function authMiddleware(req: AuthenticatedRequest, res: Response, n
     } catch (error) {
       payload = {
         userId: 'usr-1',
-        email: 'diya.jain@doorloop.com',
+        email: 'diya.jain@whatslandlord.com',
         roleId: 'role-cm',
         roleName: 'Collection Manager',
       };

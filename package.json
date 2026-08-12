@@ -1,7 +1,7 @@
 {
-  "name": "doorloop-backend",
+  "name": "whatslandlord-backend",
   "version": "1.0.0",
-  "description": "DoorLoop Property Management ERP Backend Service",
+  "description": "WhatsLandlord Property Management ERP Backend Service",
   "main": "dist/server.js",
   "type": "commonjs",
   "scripts": {

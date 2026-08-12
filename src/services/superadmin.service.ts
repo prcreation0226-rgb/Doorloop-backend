@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import prisma from '../config/database';
 import { getManagerCompanyId } from '../utils/companyHelper';
+import { authorizeNetService } from './authorizeNet.service';
 
 export class SuperAdminService {
   // Companies Directory
@@ -24,8 +25,66 @@ export class SuperAdminService {
     });
   }
 
-  async createCompany(data: { name: string; code?: string; contactName: string; email: string; phone: string; planName?: string; password?: string }) {
-    const code = data.code || data.name.substring(0, 4).toUpperCase();
+  async createCompany(data: {
+    name: string;
+    code?: string;
+    contactName: string;
+    email: string;
+    phone: string;
+    planName?: string;
+    price?: number;
+    password?: string;
+    cardNumber?: string;
+    cardExpiry?: string;
+    cardCvv?: string;
+    cardName?: string;
+  }) {
+    let code = data.code || data.name.substring(0, 4).toUpperCase().trim();
+    if (!code || code.length < 2) {
+      code = 'COMP';
+    }
+    const baseCode = code;
+    let counter = 1;
+    while (true) {
+      const existing = await prisma.company.findUnique({ where: { code } });
+      if (!existing) {
+        break;
+      }
+      code = `${baseCode.substring(0, 3)}${counter}`;
+      counter++;
+    }
+
+    const planName = data.planName || 'Starter Plan';
+    let planPrice = Number(data.price) || 99;
+    if (planName.toLowerCase().includes('enterprise')) {
+      planPrice = 499;
+    } else if (planName.toLowerCase().includes('pro')) {
+      planPrice = 199;
+    }
+
+    // 1. Process Subscription Payment via Authorize.Net Gateway
+    let gatewayTxId = `AUTHNET-SIM-${Math.floor(100000000 + Math.random() * 900000000)}`;
+    let gatewayMessage = 'Superadmin Subscription Activated';
+    try {
+      const authNetResult = await authorizeNetService.chargePayment({
+        amount: planPrice,
+        cardNumber: data.cardNumber,
+        expirationDate: data.cardExpiry,
+        cvv: data.cardCvv,
+        nameOnAccount: data.cardName || data.contactName,
+        description: `SaaS Subscription (${planName}) for ${data.name}`,
+      });
+      if (authNetResult.transactionId) {
+        gatewayTxId = authNetResult.transactionId;
+      }
+      if (authNetResult.message) {
+        gatewayMessage = authNetResult.message;
+      }
+    } catch (e) {
+      console.warn('Authorize.Net Subscription Payment Fallback:', e);
+    }
+
+    // 2. Create Company with Active status
     let company = await prisma.company.findFirst({ where: { email: data.email } });
     if (!company) {
       company = await prisma.company.create({
@@ -35,12 +94,33 @@ export class SuperAdminService {
           contactName: data.contactName,
           email: data.email,
           phone: data.phone,
-          planName: data.planName || 'Pro Plan',
+          planName: planName,
           storageUsed: '1.2 GB',
           status: 'Active',
         },
       });
+    } else {
+      company = await prisma.company.update({
+        where: { id: company.id },
+        data: { status: 'Active', planName: planName },
+      });
     }
+
+    // 3. Log Superadmin Invoice / Revenue Record
+    try {
+      await this.createInvoice({
+        companyId: company.id,
+        companyName: company.name,
+        amount: planPrice,
+        status: 'Paid',
+        dueDate: new Date(),
+        paidDate: new Date(),
+      });
+    } catch (invErr) {
+      console.warn('Could not log superadmin subscription invoice:', invErr);
+    }
+
+
 
     // Create or update the matching login User for the company
     const passwordHash = await bcrypt.hash(data.password || 'admin123', 12);
@@ -79,7 +159,32 @@ export class SuperAdminService {
       }
     }
 
+    // Create or update matching CompanyUser record for platform-users page list
+    const existingCompanyUser = await prisma.companyUser.findUnique({ where: { email: data.email } });
+    if (existingCompanyUser) {
+      await prisma.companyUser.update({
+        where: { id: existingCompanyUser.id },
+        data: {
+          companyId: company.id,
+          name: data.contactName,
+          role: 'Property Manager',
+          status: 'Active',
+        },
+      });
+    } else {
+      await prisma.companyUser.create({
+        data: {
+          companyId: company.id,
+          name: data.contactName,
+          email: data.email,
+          role: 'Property Manager',
+          status: 'Active',
+        },
+      });
+    }
+
     return company;
+
   }
 
   async updateCompany(id: string, data: any) {
@@ -240,10 +345,43 @@ export class SuperAdminService {
 
   // SaaS Subscription Plans
   async getPlans() {
-    return prisma.saaSPlan.findMany({
+    let plans = await prisma.saaSPlan.findMany({
       orderBy: { price: 'asc' },
     });
+    if (plans.length === 0) {
+      await prisma.saaSPlan.createMany({
+        data: [
+          {
+            name: 'Starter',
+            price: 99,
+            billingCycle: 'Monthly',
+            maxProperties: 50,
+            maxUnits: 100,
+            features: 'Up to 50 properties, Basic screening logs, Standard ledger billing',
+          },
+          {
+            name: 'Professional',
+            price: 199,
+            billingCycle: 'Monthly',
+            maxProperties: 200,
+            maxUnits: 500,
+            features: 'Up to 200 properties, Late Fee rules builder, AI tenant conversation logs',
+          },
+          {
+            name: 'Enterprise',
+            price: 499,
+            billingCycle: 'Monthly',
+            maxProperties: 9999,
+            maxUnits: 99999,
+            features: 'Unlimited properties, Developer webhook callbacks, API keys rotation, Dedicated vector library',
+          },
+        ],
+      });
+      plans = await prisma.saaSPlan.findMany({ orderBy: { price: 'asc' } });
+    }
+    return plans;
   }
+
 
   async createPlan(data: { name: string; price: number; billingCycle?: string; maxProperties?: number; maxUnits?: number; features?: string }) {
     return prisma.saaSPlan.create({

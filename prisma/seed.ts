@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting DoorLoop ERP Database Seeding...');
+  console.log('🌱 Starting WhatsLandlord ERP Database Seeding...');
 
   // Clean up existing data to ensure idempotent seed runs
   await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0;');

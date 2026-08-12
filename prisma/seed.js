@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 async function main() {
-    console.log('🌱 Starting DoorLoop ERP Database Seeding...');
+    console.log('🌱 Starting WhatsLandlord ERP Database Seeding...');
     // 1. Create Roles
     const adminRole = await prisma.role.upsert({
         where: { name: 'Super Admin' },
@@ -286,7 +286,7 @@ async function main() {
             create: acc,
         });
     }
-    console.log('✅ DoorLoop ERP Database Seeding Completed!');
+    console.log('✅ WhatsLandlord ERP Database Seeding Completed!');
 }
 main()
     .catch((e) => {

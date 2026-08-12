@@ -57,8 +57,8 @@ export class SuperAdminController {
   // Company Users
   async getCompanyUsers(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      let companyId = req.user?.companyId;
-      if (!companyId && req.user?.email) {
+      let companyId = req.user?.roleName === 'Super Admin' ? undefined : req.user?.companyId;
+      if (companyId === undefined && !req.user?.companyId && req.user?.email && req.user?.roleName !== 'Super Admin') {
         const dbUser = await prisma.user.findFirst({
           where: { email: req.user.email },
         });
@@ -66,6 +66,7 @@ export class SuperAdminController {
       }
       console.log('DEBUG: getCompanyUsers - req.user:', req.user, 'companyId:', companyId);
       const list = await superAdminService.getCompanyUsers(companyId);
+
       return sendSuccess({ res, data: list });
     } catch (error) {
       next(error);
