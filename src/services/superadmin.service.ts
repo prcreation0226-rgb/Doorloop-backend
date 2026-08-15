@@ -338,6 +338,14 @@ export class SuperAdminService {
   }
 
   async deleteCompanyUser(id: string) {
+    const companyUser = await prisma.companyUser.findUnique({
+      where: { id },
+    });
+    if (companyUser && companyUser.email) {
+      await prisma.user.deleteMany({
+        where: { email: companyUser.email },
+      });
+    }
     return prisma.companyUser.delete({
       where: { id },
     });

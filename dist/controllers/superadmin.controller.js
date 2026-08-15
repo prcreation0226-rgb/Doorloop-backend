@@ -60,8 +60,8 @@ class SuperAdminController {
     // Company Users
     async getCompanyUsers(req, res, next) {
         try {
-            let companyId = req.user?.companyId;
-            if (!companyId && req.user?.email) {
+            let companyId = req.user?.roleName === 'Super Admin' ? undefined : req.user?.companyId;
+            if (companyId === undefined && !req.user?.companyId && req.user?.email && req.user?.roleName !== 'Super Admin') {
                 const dbUser = await database_1.default.user.findFirst({
                     where: { email: req.user.email },
                 });

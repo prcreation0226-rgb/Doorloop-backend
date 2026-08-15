@@ -33,7 +33,7 @@ const router = (0, express_1.Router)();
 router.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
-        service: 'DoorLoop ERP Backend',
+        service: 'WhatsLandlord ERP Backend',
         timestamp: new Date().toISOString(),
     });
 });

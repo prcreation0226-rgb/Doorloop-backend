@@ -55,7 +55,7 @@ database_1.default.$connect()
     logger_1.logger.error(error, '❌ Failed to connect to the MySQL database:');
 });
 const server = app_1.default.listen(env_1.env.PORT, () => {
-    logger_1.logger.info(`🚀 DoorLoop ERP Backend Server running on http://localhost:${env_1.env.PORT}${env_1.env.API_PREFIX}`);
+    logger_1.logger.info(`🚀 WhatsLandlord ERP Backend Server running on http://localhost:${env_1.env.PORT}${env_1.env.API_PREFIX}`);
     logger_1.logger.info(`Environment: ${env_1.env.NODE_ENV}`);
 });
 server.on('error', (error) => {

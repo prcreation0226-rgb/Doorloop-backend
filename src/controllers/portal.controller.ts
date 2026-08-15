@@ -315,6 +315,7 @@ export class PortalController {
         category: d.category,
         uploadedAt: d.uploadedAt ? new Date(d.uploadedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         size: d.size || '1.5 MB',
+        fileUrl: d.fileUrl,
       }));
 
       return sendSuccess({ res, data: formatted });
@@ -632,6 +633,7 @@ export class PortalController {
         category: d.category,
         uploadedAt: d.uploadedAt ? new Date(d.uploadedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         size: d.size || '1.5 MB',
+        fileUrl: d.fileUrl,
       }));
 
       return sendSuccess({ res, data: formatted });

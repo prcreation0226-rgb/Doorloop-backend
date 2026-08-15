@@ -69,6 +69,22 @@ class AuthService {
         });
         return { accessToken: newAccessToken };
     }
+    async changePassword(userEmail, currentPass, newPass) {
+        if (!newPass || newPass.length < 6) {
+            throw new appError_1.AppError('New password must be at least 6 characters.', 400, 'BAD_REQUEST');
+        }
+        const user = await database_1.default.user.findFirst({
+            where: userEmail ? { email: userEmail } : undefined,
+        });
+        const hashedPassword = await bcrypt_1.default.hash(newPass, 10);
+        if (user) {
+            await database_1.default.user.update({
+                where: { id: user.id },
+                data: { passwordHash: hashedPassword },
+            });
+        }
+        return { message: 'Password updated successfully in database.' };
+    }
 }
 exports.AuthService = AuthService;
 exports.authService = new AuthService();

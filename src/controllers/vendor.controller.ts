@@ -126,11 +126,15 @@ export class VendorController {
       const id = req.params.id as string;
       const companyId = req.user?.companyId;
 
-      if (companyId) {
-        const check = await prisma.vendor.findFirst({
-          where: { id, companyId },
+      const vendor = await prisma.vendor.findFirst({
+        where: companyId ? { id, companyId } : { id },
+      });
+      if (!vendor) throw new Error('Vendor not found.');
+
+      if (vendor.email) {
+        await prisma.user.deleteMany({
+          where: { email: vendor.email },
         });
-        if (!check) throw new Error('Vendor not found.');
       }
 
       await prisma.vendor.delete({

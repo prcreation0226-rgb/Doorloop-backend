@@ -120,12 +120,15 @@ class VendorController {
         try {
             const id = req.params.id;
             const companyId = req.user?.companyId;
-            if (companyId) {
-                const check = await database_1.default.vendor.findFirst({
-                    where: { id, companyId },
+            const vendor = await database_1.default.vendor.findFirst({
+                where: companyId ? { id, companyId } : { id },
+            });
+            if (!vendor)
+                throw new Error('Vendor not found.');
+            if (vendor.email) {
+                await database_1.default.user.deleteMany({
+                    where: { email: vendor.email },
                 });
-                if (!check)
-                    throw new Error('Vendor not found.');
             }
             await database_1.default.vendor.delete({
                 where: { id },

@@ -119,7 +119,7 @@ class SecondaryService {
         });
         const occupancyRate = unitCount > 0 ? Math.round((occupiedUnits / unitCount) * 100) : 0;
         const queryLower = prompt.toLowerCase();
-        let responseText = `I am your DoorLoop ERP AI Assistant. Currently, your portfolio consists of ${propertyCount} properties, ${unitCount} total units (${occupancyRate}% occupancy), and ${tenantCount} active tenants. How can I further assist with your property management operations?`;
+        let responseText = `I am your WhatsLandlord ERP AI Assistant. Currently, your portfolio consists of ${propertyCount} properties, ${unitCount} total units (${occupancyRate}% occupancy), and ${tenantCount} active tenants. How can I further assist with your property management operations?`;
         if (queryLower.includes('occupancy') || queryLower.includes('units')) {
             responseText = `Portfolio Occupancy Analysis: You have ${unitCount} total units across ${propertyCount} properties. Current occupied units: ${occupiedUnits} (${occupancyRate}% occupancy rate).`;
         }

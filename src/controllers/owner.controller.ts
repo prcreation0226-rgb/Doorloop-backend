@@ -243,6 +243,13 @@ export class OwnerController {
             });
           }
 
+          // 3.5 Delete associated user record
+          if (ownerExists.email) {
+            await tx.user.deleteMany({
+              where: { email: ownerExists.email },
+            });
+          }
+
           // 4. Finally delete the owner record
           await tx.owner.delete({
             where: { id },

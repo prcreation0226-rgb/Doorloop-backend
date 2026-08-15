@@ -23,6 +23,7 @@ class TenantController {
                         },
                     },
                     screeningReports: true,
+                    invoices: true,
                 },
             });
             return (0, apiResponse_js_1.sendSuccess)({ res, data: tenants });
@@ -104,6 +105,7 @@ class TenantController {
                         },
                     },
                     leases: true,
+                    invoices: true,
                 },
             });
             if (!tenant)
@@ -201,15 +203,22 @@ class TenantController {
     async delete(req, res, next) {
         try {
             const companyId = req.user?.companyId;
-            if (companyId) {
-                const tenant = await database_js_1.default.tenant.findFirst({
-                    where: { id: req.params.id, companyId },
+            const id = req.params.id;
+            const tenant = await database_js_1.default.tenant.findUnique({
+                where: { id },
+            });
+            if (!tenant)
+                throw new appError_js_1.AppError('Tenant not found.', 404, 'NOT_FOUND');
+            if (companyId && tenant.companyId !== companyId) {
+                throw new appError_js_1.AppError('Tenant not found.', 404, 'NOT_FOUND');
+            }
+            if (tenant.email) {
+                await database_js_1.default.user.deleteMany({
+                    where: { email: tenant.email },
                 });
-                if (!tenant)
-                    throw new appError_js_1.AppError('Tenant not found.', 404, 'NOT_FOUND');
             }
             await database_js_1.default.tenant.delete({
-                where: { id: req.params.id },
+                where: { id },
             });
             return (0, apiResponse_js_1.sendSuccess)({ res, data: { success: true } });
         }

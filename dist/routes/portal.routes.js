@@ -45,6 +45,9 @@ router.post('/screening/reports', (req, res, next) => portal_controller_1.portal
 router.put('/screening/reports/:id', (req, res, next) => portal_controller_1.portalController.updateScreeningReport(req, res, next));
 router.get('/violations', (req, res, next) => portal_controller_1.portalController.getViolations(req, res, next));
 router.post('/violations', (req, res, next) => portal_controller_1.portalController.createViolation(req, res, next));
+// General Dashboard User Profile Views
+router.get('/user/profile', (req, res, next) => portal_controller_1.portalController.getUserProfile(req, res, next));
+router.post('/user/profile', (req, res, next) => portal_controller_1.portalController.updateUserProfile(req, res, next));
 // Maintenance Staff Profile & Tasks Views
 router.get('/staff/profile', (req, res, next) => portal_controller_1.portalController.getStaffProfile(req, res, next));
 router.post('/staff/profile', (req, res, next) => portal_controller_1.portalController.updateStaffProfile(req, res, next));

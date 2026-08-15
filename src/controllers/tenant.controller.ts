@@ -20,6 +20,7 @@ export class TenantController {
             },
           },
           screeningReports: true,
+          invoices: true,
         },
       });
       return sendSuccess({ res, data: tenants });
@@ -106,6 +107,7 @@ export class TenantController {
             },
           },
           leases: true,
+          invoices: true,
         },
       });
       if (!tenant) throw new AppError('Tenant not found.', 404, 'NOT_FOUND');
@@ -207,14 +209,25 @@ export class TenantController {
   async delete(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const companyId = req.user?.companyId;
-      if (companyId) {
-        const tenant = await prisma.tenant.findFirst({
-          where: { id: req.params.id as string, companyId },
-        });
-        if (!tenant) throw new AppError('Tenant not found.', 404, 'NOT_FOUND');
+      const id = req.params.id as string;
+
+      const tenant = await prisma.tenant.findUnique({
+        where: { id },
+      });
+      if (!tenant) throw new AppError('Tenant not found.', 404, 'NOT_FOUND');
+
+      if (companyId && tenant.companyId !== companyId) {
+        throw new AppError('Tenant not found.', 404, 'NOT_FOUND');
       }
+
+      if (tenant.email) {
+        await prisma.user.deleteMany({
+          where: { email: tenant.email },
+        });
+      }
+
       await prisma.tenant.delete({
-        where: { id: req.params.id as string },
+        where: { id },
       });
       return sendSuccess({ res, data: { success: true } });
     } catch (error) {
