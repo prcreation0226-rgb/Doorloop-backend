@@ -204,6 +204,33 @@ class SuperAdminController {
             next(error);
         }
     }
+    // WordPress Inquiries
+    async createWordPressInquiry(req, res, next) {
+        try {
+            const { name, email, phone, subject, message } = req.body;
+            if (!name || !email || !phone || !message) {
+                return res.status(400).json({ message: 'Name, email, phone, and message are required' });
+            }
+            const inquiry = await database_1.default.wordPressInquiry.create({
+                data: { name, email, phone, subject, message },
+            });
+            return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: inquiry, message: 'Inquiry saved successfully' });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    async getWordPressInquiries(req, res, next) {
+        try {
+            const inquiries = await database_1.default.wordPressInquiry.findMany({
+                orderBy: { createdAt: 'desc' },
+            });
+            return (0, apiResponse_1.sendSuccess)({ res, data: inquiries });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
 }
 exports.SuperAdminController = SuperAdminController;
 exports.superAdminController = new SuperAdminController();

@@ -24,6 +24,7 @@ import inspectionRoutes from './inspection.routes';
 import documentRoutes from './document.routes';
 import reportRoutes from '../reports/routes/report.routes';
 import { authMiddleware } from '../middlewares/auth.middleware';
+import { superAdminController } from '../controllers/superadmin.controller';
 
 const router = Router();
 
@@ -34,6 +35,8 @@ router.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+router.post('/public/wordpress-inquiry', (req, res, next) => superAdminController.createWordPressInquiry(req, res, next));
 
 router.use('/auth', authRoutes);
 router.use('/properties', authMiddleware, propertyRoutes);

@@ -1226,3 +1226,15 @@ enum work_orders_status {
   Cancelled
   Closed
 }
+
+model WordPressInquiry {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  phone     String
+  subject   String?
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@map("wordpress_inquiries")
+}

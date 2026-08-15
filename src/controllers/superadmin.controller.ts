@@ -201,6 +201,33 @@ export class SuperAdminController {
       next(error);
     }
   }
+
+  // WordPress Inquiries
+  async createWordPressInquiry(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { name, email, phone, subject, message } = req.body;
+      if (!name || !email || !phone || !message) {
+        return res.status(400).json({ message: 'Name, email, phone, and message are required' });
+      }
+      const inquiry = await prisma.wordPressInquiry.create({
+        data: { name, email, phone, subject, message },
+      });
+      return sendSuccess({ res, statusCode: 201, data: inquiry, message: 'Inquiry saved successfully' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getWordPressInquiries(req: Request, res: Response, next: NextFunction) {
+    try {
+      const inquiries = await prisma.wordPressInquiry.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
+      return sendSuccess({ res, data: inquiries });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const superAdminController = new SuperAdminController();

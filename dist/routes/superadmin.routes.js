@@ -29,4 +29,6 @@ router.post('/settings', (req, res, next) => superadmin_controller_1.superAdminC
 // Audit Logs
 router.get('/audit-logs', (req, res, next) => superadmin_controller_1.superAdminController.getAuditLogs(req, res, next));
 router.post('/audit-logs', (req, res, next) => superadmin_controller_1.superAdminController.createAuditLog(req, res, next));
+// WordPress Inquiries
+router.get('/wordpress-inquiries', (req, res, next) => superadmin_controller_1.superAdminController.getWordPressInquiries(req, res, next));
 exports.default = router;

@@ -36,4 +36,7 @@ router.post('/settings', (req, res, next) => superAdminController.updateSettings
 router.get('/audit-logs', (req, res, next) => superAdminController.getAuditLogs(req, res, next));
 router.post('/audit-logs', (req, res, next) => superAdminController.createAuditLog(req, res, next));
 
+// WordPress Inquiries
+router.get('/wordpress-inquiries', (req, res, next) => superAdminController.getWordPressInquiries(req, res, next));
+
 export default router;
