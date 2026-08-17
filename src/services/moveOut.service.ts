@@ -290,15 +290,7 @@ export class MoveOutService {
         },
       });
 
-      // 2. Update Lease status to Ended
-      await tx.lease.update({
-        where: { id: moveOut.leaseId },
-        data: {
-          status: 'Ended',
-        },
-      });
-
-      // 3. Update Unit status to Vacant
+      // 2. Update Unit status to Vacant
       await tx.unit.update({
         where: { id: moveOut.unitId },
         data: {
@@ -306,28 +298,43 @@ export class MoveOutService {
         },
       });
 
-      // 4. Update Tenant status to Inactive
+      // 3. Update Tenant status to Inactive and clear unitId
       await tx.tenant.update({
         where: { id: moveOut.lease.tenantId },
         data: {
           status: 'Inactive',
+          unitId: null,
         },
       });
 
+      // 4. Delete screening reports of the tenant
+      await tx.screeningReport.deleteMany({
+        where: { tenantId: moveOut.lease.tenantId },
+      });
+
+      // 5. Delete leases of the tenant (cascades to delete moveOuts, moveIns, renewals)
+      await tx.lease.deleteMany({
+        where: { tenantId: moveOut.lease.tenantId },
+      });
+
       const validUserId = await getValidUserId(userId, tx);
-      // 5. Create Audit Log
+      // 6. Create Audit Log
       await tx.auditLog.create({
         data: {
-          action: 'Move Out Completed & Lease Ended',
+          action: 'Move Out Completed & Leases/Screenings Cleared',
           userId: validUserId,
           module: 'Leasing',
-          object: `MoveOut ${id}`,
+          object: `Tenant ${moveOut.lease.tenantId}`,
           ip: '127.0.0.1',
           status: 'Success',
         },
       });
 
-      return updatedMoveOut;
+      return {
+        ...moveOut,
+        status: 'COMPLETED',
+        completedDate: new Date(),
+      };
     });
   }
 

@@ -215,6 +215,7 @@ model Lease {
   unit          Unit          @relation(fields: [unitId], references: [id])
   moveIn        MoveIn?
   moveOut       MoveOut?
+  renewal       LeaseRenewal?
   payments      RentPayment[]
 
   @@index([companyId], map: "leases_companyId_fkey")
@@ -1238,3 +1239,25 @@ model WordPressInquiry {
 
   @@map("wordpress_inquiries")
 }
+
+model LeaseRenewal {
+  id            String        @id @default(uuid())
+  leaseId       String        @unique
+  newRentAmount Float
+  newEndDate    DateTime
+  status        RenewalStatus @default(PENDING)
+  termMonths    Int           @default(12)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  lease         Lease         @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+
+  @@map("lease_renewals")
+}
+
+enum RenewalStatus {
+  PENDING
+  OFFER_SENT
+  ACCEPTED
+  REJECTED
+}
+
