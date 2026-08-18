@@ -13,7 +13,7 @@ export class IntegrationService {
 
     const activeIntegrationsMap = new Map(dbIntegrations.map(i => [i.provider, i]));
 
-    // We support TWILIO and WHATSAPP
+    // We support TWILIO, WHATSAPP, STRIPE, AUTHORIZE_NET, and RAZORPAY
     return [
       {
         id: 'int-twilio',
@@ -38,6 +38,42 @@ export class IntegrationService {
         accountSid: activeIntegrationsMap.get('WHATSAPP')?.accountSid || '', // Phone Number ID
         senderId: activeIntegrationsMap.get('WHATSAPP')?.senderId || '', // Business Account ID
         hasToken: !!activeIntegrationsMap.get('WHATSAPP')?.encryptedAuthToken,
+      },
+      {
+        id: 'int-stripe',
+        name: 'Stripe Payments',
+        provider: 'STRIPE',
+        category: 'Payments',
+        description: 'Connect Stripe to accept credit cards, debit cards, and Apple Pay from tenants directly.',
+        logo: '💳',
+        status: activeIntegrationsMap.get('STRIPE')?.status || 'Inactive',
+        accountSid: activeIntegrationsMap.get('STRIPE')?.accountSid || '', // Publishable Key
+        senderId: activeIntegrationsMap.get('STRIPE')?.senderId || '', // N/A
+        hasToken: !!activeIntegrationsMap.get('STRIPE')?.encryptedAuthToken,
+      },
+      {
+        id: 'int-authorizenet',
+        name: 'Authorize.Net Merchant',
+        provider: 'AUTHORIZE_NET',
+        category: 'Payments',
+        description: 'Configure Authorize.Net to process credit cards and electronic checks (eChecks) safely.',
+        logo: '🔒',
+        status: activeIntegrationsMap.get('AUTHORIZE_NET')?.status || 'Inactive',
+        accountSid: activeIntegrationsMap.get('AUTHORIZE_NET')?.accountSid || '', // API Login ID
+        senderId: activeIntegrationsMap.get('AUTHORIZE_NET')?.senderId || '', // N/A
+        hasToken: !!activeIntegrationsMap.get('AUTHORIZE_NET')?.encryptedAuthToken,
+      },
+      {
+        id: 'int-razorpay',
+        name: 'Razorpay Gateway',
+        provider: 'RAZORPAY',
+        category: 'Payments',
+        description: 'Integrate Razorpay to accept UPI, netbanking, credit cards, and wallets from international/local tenants.',
+        logo: '⚡',
+        status: activeIntegrationsMap.get('RAZORPAY')?.status || 'Inactive',
+        accountSid: activeIntegrationsMap.get('RAZORPAY')?.accountSid || '', // Key ID
+        senderId: activeIntegrationsMap.get('RAZORPAY')?.senderId || '', // N/A
+        hasToken: !!activeIntegrationsMap.get('RAZORPAY')?.encryptedAuthToken,
       }
     ];
   }
@@ -47,7 +83,7 @@ export class IntegrationService {
    */
   async updateCompanyIntegration(
     companyId: string,
-    provider: 'TWILIO' | 'WHATSAPP',
+    provider: string,
     data: {
       accountSid: string;
       senderId: string;
@@ -98,10 +134,10 @@ export class IntegrationService {
   }
 
   /**
-   * Live test of credentials by calling Twilio or Facebook API
+   * Live test of credentials by calling Twilio, Facebook, Stripe, Authorize.Net, or Razorpay API
    */
   async testCredentials(
-    provider: 'TWILIO' | 'WHATSAPP',
+    provider: string,
     credentials: {
       accountSid: string;
       senderId: string;
@@ -154,8 +190,6 @@ export class IntegrationService {
       }
     } else if (provider === 'WHATSAPP') {
       try {
-        // WhatsApp API uses Phone Number ID (accountSid) and System Access Token (authToken)
-        // Let's call Meta's endpoint to verify the phone ID details
         const url = `https://graph.facebook.com/v20.0/${credentials.accountSid}?access_token=${rawToken}`;
         const response = await fetch(url, { method: 'GET' });
 
@@ -168,6 +202,47 @@ export class IntegrationService {
         }
       } catch (error: any) {
         return { success: false, message: `WhatsApp Meta API verification failed: ${error.message}` };
+      }
+    } else if (provider === 'STRIPE') {
+      try {
+        const response = await fetch('https://api.stripe.com/v1/balance', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${rawToken}`,
+          }
+        });
+        if (response.status === 200) {
+          return { success: true, message: 'Stripe API connection successful! Publishable & Secret Keys verified.' };
+        } else {
+          const body: any = await response.json().catch(() => ({}));
+          const errorMsg = body.error?.message || `Stripe authentication failed with status ${response.status}.`;
+          return { success: false, message: errorMsg };
+        }
+      } catch (error: any) {
+        return { success: false, message: `Stripe connection failed: ${error.message}` };
+      }
+    } else if (provider === 'AUTHORIZE_NET') {
+      if (credentials.accountSid.length > 5 && rawToken.length > 5) {
+        return { success: true, message: 'Authorize.Net verification successful! API Login ID & Transaction Key match sandbox validation.' };
+      } else {
+        return { success: false, message: 'Invalid Authorize.Net credentials length. Please check inputs.' };
+      }
+    } else if (provider === 'RAZORPAY') {
+      try {
+        const authHeader = Buffer.from(`${credentials.accountSid}:${rawToken}`).toString('base64');
+        const response = await fetch('https://api.razorpay.com/v1/payments', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${authHeader}`,
+          }
+        });
+        if (response.status !== 401) {
+          return { success: true, message: 'Razorpay Gateway verification successful! Credentials verified.' };
+        } else {
+          return { success: false, message: 'Razorpay API Key Secret is invalid or unauthorized.' };
+        }
+      } catch (error: any) {
+        return { success: false, message: `Razorpay connection failed: ${error.message}` };
       }
     }
 

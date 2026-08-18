@@ -535,10 +535,15 @@ model CrmLead {
 model ScreeningReport {
   id           String   @id @default(uuid())
   tenantId     String
-  creditScore  Int
+  creditScore  Int      @default(0)
   criminalPass Boolean  @default(true)
   evictionPass Boolean  @default(true)
-  status       String   @default("Approved")
+  status       String   @default("Pending Documents")
+  documentUrl  String?  @db.Text
+  documentName String?
+  dob          String?
+  ssn          String?
+  authorized   Boolean? @default(false)
   createdAt    DateTime @default(now())
   companyId    String?
   company      Company? @relation(fields: [companyId], references: [id])

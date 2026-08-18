@@ -188,17 +188,124 @@ export class SuperAdminService {
   }
 
   async updateCompany(id: string, data: any) {
-    return prisma.company.update({
+    const updated = await prisma.company.update({
       where: { id },
       data,
     });
+
+    if (data.status) {
+      const companyStatus = data.status; // "Active" or "Suspended"
+      const tenantStatus = companyStatus === 'Active' ? 'Active' : 'Inactive';
+
+      await prisma.$transaction([
+        prisma.user.updateMany({
+          where: { companyId: id },
+          data: { status: companyStatus }
+        }),
+        prisma.companyUser.updateMany({
+          where: { companyId: id },
+          data: { status: companyStatus }
+        }),
+        prisma.property.updateMany({
+          where: { companyId: id },
+          data: { status: companyStatus }
+        }),
+        prisma.tenant.updateMany({
+          where: { companyId: id },
+          data: { status: tenantStatus }
+        })
+      ]);
+    }
+
+    return updated;
   }
 
   async deleteCompany(id: string) {
-    return prisma.company.delete({
-      where: { id },
+    // 1. Fetch related IDs for nested/indirect deletions
+    const tenants = await prisma.tenant.findMany({
+      where: { companyId: id },
+      select: { id: true }
+    });
+    const tenantIds = tenants.map(t => t.id);
+
+    const owners = await prisma.owner.findMany({
+      where: { companyId: id },
+      select: { id: true }
+    });
+    const ownerIds = owners.map(o => o.id);
+
+    // 2. Perform deletions in transactional sequence to resolve foreign keys
+    return prisma.$transaction(async (tx) => {
+      // a. Webhooks & Integrations logs
+      await tx.companyIntegration.deleteMany({ where: { companyId: id } });
+      await tx.saaSInvoice.deleteMany({ where: { companyId: id } });
+      
+      // b. Invoices & Payments
+      await tx.rentPayment.deleteMany({ where: { companyId: id } });
+      await tx.invoice.deleteMany({ where: { companyId: id } });
+
+      // c. Leases & Renewals (cascade deletes MoveIn, MoveOut, Renewals)
+      await tx.lease.deleteMany({ where: { companyId: id } });
+
+      // d. Inspections & Templates (cascade deletes rooms, items, photos)
+      await tx.inspection.deleteMany({ where: { companyId: id } });
+      await tx.inspectionTemplate.deleteMany({ where: { companyId: id } });
+
+      // e. Violations & Work Orders
+      await tx.violation.deleteMany({ where: { companyId: id } });
+      await tx.workOrder.deleteMany({ where: { companyId: id } });
+      await tx.serviceRequest.deleteMany({ where: { companyId: id } });
+
+      // f. Property, Units, Buildings (cascade deletes units, buildings)
+      await tx.property.deleteMany({ where: { companyId: id } });
+
+      // g. Tenants sub-tables
+      await tx.charge.deleteMany({ where: { tenantId: { in: tenantIds } } });
+      await tx.deposit.deleteMany({ where: { tenantId: { in: tenantIds } } });
+      await tx.paymentPlan.deleteMany({ where: { tenantId: { in: tenantIds } } });
+      await tx.insurancePolicy.deleteMany({ where: { companyId: id } });
+      await tx.screeningReport.deleteMany({ where: { companyId: id } });
+      await tx.tenant.deleteMany({ where: { companyId: id } });
+
+      // h. Owners sub-tables
+      await tx.ownerDistribution.deleteMany({ where: { ownerId: { in: ownerIds } } });
+      await tx.ownerDocument.deleteMany({ where: { companyId: id } });
+      await tx.owner.deleteMany({ where: { companyId: id } });
+
+      // i. Accounts & Ledger (cascade deletes lines)
+      await tx.journalEntry.deleteMany({ where: { companyId: id } });
+      await tx.coAAccount.deleteMany({ where: { companyId: id } });
+      await tx.bankAccount.deleteMany({ where: { companyId: id } });
+
+      // j. Documents & Comms
+      await tx.document.deleteMany({ where: { companyId: id } });
+      await tx.tenantDocument.deleteMany({ where: { companyId: id } });
+      await tx.announcement.deleteMany({ where: { companyId: id } });
+      await tx.notification.deleteMany({ where: { companyId: id } });
+      await tx.aiChatLog.deleteMany({ where: { companyId: id } });
+      await tx.promotion.deleteMany({ where: { companyId: id } });
+
+      // k. Users, Staff, Vendors
+      await tx.staffProfile.deleteMany({ where: { companyId: id } });
+      await tx.vendor.deleteMany({ where: { companyId: id } });
+      await tx.companyUser.deleteMany({ where: { companyId: id } });
+
+      // Nullify userId reference on audit logs before deleting users
+      const companyUsers = await tx.user.findMany({ where: { companyId: id }, select: { id: true } });
+      const userIds = companyUsers.map(u => u.id);
+      await tx.auditLog.updateMany({
+        where: { userId: { in: userIds } },
+        data: { userId: null }
+      });
+      await tx.user.deleteMany({ where: { companyId: id } });
+
+      // l. Finally, delete the company record itself
+      return tx.company.delete({
+        where: { id },
+      });
     });
   }
+
 
   async getCompanyUsers(companyId?: string) {
     const whereClause: any = {};
@@ -341,13 +448,15 @@ export class SuperAdminService {
     const companyUser = await prisma.companyUser.findUnique({
       where: { id },
     });
-    if (companyUser && companyUser.email) {
-      await prisma.user.deleteMany({
-        where: { email: companyUser.email },
+    return prisma.$transaction(async (tx) => {
+      if (companyUser && companyUser.email) {
+        await tx.user.deleteMany({
+          where: { email: companyUser.email },
+        });
+      }
+      return tx.companyUser.delete({
+        where: { id },
       });
-    }
-    return prisma.companyUser.delete({
-      where: { id },
     });
   }
 

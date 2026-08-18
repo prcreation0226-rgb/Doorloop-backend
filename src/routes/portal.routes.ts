@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { portalController } from '../controllers/portal.controller';
+import { uploadScreeningReportDoc } from '../middlewares/upload.middleware';
 
 const router = Router();
 
@@ -46,8 +47,10 @@ router.get('/crm/leads', (req, res, next) => portalController.getCrmLeads(req, r
 router.post('/crm/leads', (req, res, next) => portalController.createCrmLead(req, res, next));
 
 router.get('/screening/reports', (req, res, next) => portalController.getScreeningReports(req, res, next));
+router.get('/screening/reports/:id', (req, res, next) => portalController.getScreeningReportById(req, res, next));
 router.post('/screening/reports', (req, res, next) => portalController.createScreeningReport(req, res, next));
 router.put('/screening/reports/:id', (req, res, next) => portalController.updateScreeningReport(req, res, next));
+router.post('/screening/reports/:id/upload', uploadScreeningReportDoc.single('document'), (req, res, next) => portalController.uploadScreeningDocument(req, res, next));
 
 router.get('/violations', (req, res, next) => portalController.getViolations(req, res, next));
 router.post('/violations', (req, res, next) => portalController.createViolation(req, res, next));
