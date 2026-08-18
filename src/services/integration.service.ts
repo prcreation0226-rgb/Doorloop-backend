@@ -39,6 +39,7 @@ export class IntegrationService {
         senderId: activeIntegrationsMap.get('WHATSAPP')?.senderId || '', // Business Account ID
         hasToken: !!activeIntegrationsMap.get('WHATSAPP')?.encryptedAuthToken,
       },
+      /*
       {
         id: 'int-stripe',
         name: 'Stripe Payments',
@@ -51,6 +52,7 @@ export class IntegrationService {
         senderId: activeIntegrationsMap.get('STRIPE')?.senderId || '', // N/A
         hasToken: !!activeIntegrationsMap.get('STRIPE')?.encryptedAuthToken,
       },
+      */
       {
         id: 'int-authorizenet',
         name: 'Authorize.Net Merchant',
@@ -63,6 +65,7 @@ export class IntegrationService {
         senderId: activeIntegrationsMap.get('AUTHORIZE_NET')?.senderId || '', // N/A
         hasToken: !!activeIntegrationsMap.get('AUTHORIZE_NET')?.encryptedAuthToken,
       },
+      /*
       {
         id: 'int-razorpay',
         name: 'Razorpay Gateway',
@@ -75,6 +78,7 @@ export class IntegrationService {
         senderId: activeIntegrationsMap.get('RAZORPAY')?.senderId || '', // N/A
         hasToken: !!activeIntegrationsMap.get('RAZORPAY')?.encryptedAuthToken,
       }
+      */
     ];
   }
 
