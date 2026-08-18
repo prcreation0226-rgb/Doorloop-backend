@@ -682,6 +682,7 @@ model Company {
   workOrders          WorkOrder[]
   ownerDocuments      OwnerDocument[]
   tenantDocuments     TenantDocument[]
+  integrations        CompanyIntegration[]
 
   @@map("companies")
 }
@@ -1259,5 +1260,29 @@ enum RenewalStatus {
   OFFER_SENT
   ACCEPTED
   REJECTED
+}
+
+model CompanyIntegration {
+  id                  String   @id @default(uuid())
+  companyId           String
+  provider            String   // "TWILIO" or "WHATSAPP"
+  status              String   @default("Inactive") // "Active" or "Inactive"
+  
+  // Public keys/identifiers
+  accountSid          String?  // Twilio Account SID or Meta WhatsApp Phone ID
+  senderId            String?  // Twilio Number/Service SID or Meta WhatsApp Account ID
+  
+  // Encrypted Keys
+  encryptedAuthToken  String?  @db.Text // Encrypted Twilio Token or WhatsApp System Token
+  encryptionIv        String?  // IV used for GCM encryption
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, provider])
+  @@index([companyId])
+  @@map("company_integrations")
 }
 

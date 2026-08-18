@@ -24,6 +24,7 @@ import inspectionTemplateRoutes from './inspectionTemplate.routes';
 import inspectionRoutes from './inspection.routes';
 import documentRoutes from './document.routes';
 import reportRoutes from '../reports/routes/report.routes';
+import integrationRoutes from './integration.routes';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { superAdminController } from '../controllers/superadmin.controller';
 
@@ -63,7 +64,9 @@ router.use('/inspection-templates', authMiddleware, inspectionTemplateRoutes);
 router.use('/inspections', authMiddleware, inspectionRoutes);
 router.use('/documents', authMiddleware, documentRoutes);
 router.use('/reports', authMiddleware, reportRoutes);
+router.use('/integrations', authMiddleware, integrationRoutes);
 router.use('/', authMiddleware, secondaryRoutes);
 
 export default router;
+
 
