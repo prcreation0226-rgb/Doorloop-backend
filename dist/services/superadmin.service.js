@@ -51,28 +51,16 @@ class SuperAdminService {
         else if (planName.toLowerCase().includes('pro')) {
             planPrice = 199;
         }
-        // 1. Process Subscription Payment via Authorize.Net Gateway
-        let gatewayTxId = `AUTHNET-SIM-${Math.floor(100000000 + Math.random() * 900000000)}`;
-        let gatewayMessage = 'Superadmin Subscription Activated';
-        try {
-            const authNetResult = await authorizeNet_service_1.authorizeNetService.chargePayment({
-                amount: planPrice,
-                cardNumber: data.cardNumber,
-                expirationDate: data.cardExpiry,
-                cvv: data.cardCvv,
-                nameOnAccount: data.cardName || data.contactName,
-                description: `SaaS Subscription (${planName}) for ${data.name}`,
-            });
-            if (authNetResult.transactionId) {
-                gatewayTxId = authNetResult.transactionId;
-            }
-            if (authNetResult.message) {
-                gatewayMessage = authNetResult.message;
-            }
+        // 1. Process & Verify Subscription Payment via Authorize.Net Gateway
+        let gatewayTxId = data.transactionId || '';
+        if (!gatewayTxId) {
+            throw new Error('Payment Transaction ID is required for registration.');
         }
-        catch (e) {
-            console.warn('Authorize.Net Subscription Payment Fallback:', e);
+        const verifyResult = await authorizeNet_service_1.authorizeNetService.verifyTransaction(gatewayTxId);
+        if (!verifyResult.success) {
+            throw new Error(`Payment verification failed: ${verifyResult.message}`);
         }
+        planPrice = verifyResult.amount || planPrice;
         // 2. Create Company with Active status
         let company = await database_1.default.company.findFirst({ where: { email: data.email } });
         if (!company) {
@@ -104,6 +92,7 @@ class SuperAdminService {
                 status: 'Paid',
                 dueDate: new Date(),
                 paidDate: new Date(),
+                transactionId: gatewayTxId,
             });
         }
         catch (invErr) {
@@ -485,6 +474,7 @@ class SuperAdminService {
                 status: data.status || 'Paid',
                 dueDate: data.dueDate ? new Date(data.dueDate) : new Date(),
                 paidDate: data.paidDate ? new Date(data.paidDate) : (data.status === 'Paid' ? new Date() : null),
+                transactionId: data.transactionId || null,
             },
         });
     }

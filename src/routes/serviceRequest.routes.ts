@@ -4,6 +4,8 @@ import { serviceRequestController } from '../controllers/serviceRequest.controll
 const router = Router();
 
 router.get('/', (req, res, next) => serviceRequestController.getAll(req, res, next));
+router.post('/troubleshoot', (req, res, next) => serviceRequestController.troubleshoot(req, res, next));
+router.post('/auto-assign', (req, res, next) => serviceRequestController.autoAssign(req, res, next));
 router.get('/:id', (req, res, next) => serviceRequestController.getById(req, res, next));
 router.post('/', (req, res, next) => serviceRequestController.create(req, res, next));
 router.put('/:id', (req, res, next) => serviceRequestController.update(req, res, next));

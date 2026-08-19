@@ -295,5 +295,119 @@ class ServiceRequestController {
             next(error);
         }
     }
+    // --- AI INSTANT DIY TROUBLESHOOTING SUGGESTIONS ---
+    async troubleshoot(req, res, next) {
+        try {
+            const { title, description, category } = req.body;
+            const textToAnalyze = `${title || ''} ${description || ''}`.trim();
+            const openAiApiKey = process.env.OPENAI_API_KEY || '';
+            let tips = [];
+            let detectedCategory = category || 'General';
+            let emergencyAlert = false;
+            const lower = textToAnalyze.toLowerCase();
+            if (lower.includes('leak') || lower.includes('water') || lower.includes('drip') || lower.includes('flood') || lower.includes('clog') || lower.includes('toilet') || lower.includes('sink')) {
+                detectedCategory = 'Plumbing';
+                if (lower.includes('flood') || lower.includes('burst') || lower.includes('ceiling')) {
+                    emergencyAlert = true;
+                }
+            }
+            else if (lower.includes('ac') || lower.includes('hvac') || lower.includes('heat') || lower.includes('cold') || lower.includes('cooling') || lower.includes('thermostat')) {
+                detectedCategory = 'HVAC';
+            }
+            else if (lower.includes('power') || lower.includes('light') || lower.includes('plug') || lower.includes('breaker') || lower.includes('outlet') || lower.includes('spark') || lower.includes('wire')) {
+                detectedCategory = 'Electrical';
+                if (lower.includes('spark') || lower.includes('smoke') || lower.includes('fire')) {
+                    emergencyAlert = true;
+                }
+            }
+            else if (lower.includes('disposal') || lower.includes('dryer') || lower.includes('washer') || lower.includes('fridge') || lower.includes('refrigerator') || lower.includes('stove') || lower.includes('oven')) {
+                detectedCategory = 'Appliance';
+            }
+            if (openAiApiKey && openAiApiKey !== 'your_openai_api_key_here' && openAiApiKey.trim().length > 10) {
+                try {
+                    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${openAiApiKey.trim()}`,
+                        },
+                        body: JSON.stringify({
+                            model: process.env.OPENAI_MODEL || 'gpt-4o',
+                            messages: [
+                                {
+                                    role: 'system',
+                                    content: 'You are an expert home maintenance technician. A resident reported an issue. Provide 3 short, practical, safe DIY troubleshooting steps the resident can try right now before a contractor is dispatched. Output ONLY 3 bullet points, each under 18 words.',
+                                },
+                                { role: 'user', content: `Issue: ${textToAnalyze}` },
+                            ],
+                            temperature: 0.3,
+                            max_tokens: 250,
+                        }),
+                    });
+                    if (aiResponse.ok) {
+                        const aiJson = await aiResponse.json();
+                        const rawContent = aiJson.choices?.[0]?.message?.content?.trim() || '';
+                        tips = rawContent
+                            .split('\n')
+                            .map((line) => line.replace(/^[-*•\d.]+\s*/, '').trim())
+                            .filter((line) => line.length > 5);
+                    }
+                }
+                catch (e) {
+                    console.warn('[AI DIY Troubleshooting] OpenAI call failed, using rule engine:', e);
+                }
+            }
+            // Rule-based fallback if OpenAI is unconfigured or failed
+            if (tips.length === 0) {
+                if (detectedCategory === 'Plumbing') {
+                    tips = [
+                        'Locate shutoff valve under sink or toilet and turn clockwise to stop active water flow.',
+                        'For clogged drains or toilets, use a plunger firmly with 5-10 smooth plunges.',
+                        'Place a bucket or towels underneath to catch drips while waiting for technician.',
+                    ];
+                }
+                else if (detectedCategory === 'HVAC') {
+                    tips = [
+                        'Check thermostat settings: ensure mode is set to COOL/HEAT and batteries are fresh.',
+                        'Verify HVAC return vent filter is clean and not blocked by dust or furniture.',
+                        'Inspect main electrical panel to see if the AC/Heat circuit breaker tripped.',
+                    ];
+                }
+                else if (detectedCategory === 'Electrical') {
+                    tips = [
+                        'Press the red/TEST & RESET button on GFCI wall outlets (commonly in kitchens/baths).',
+                        'Check main circuit breaker panel for any switches flipped to the middle or OFF position.',
+                        'Unplug high-draw appliances from the circuit to test if breaker is overloaded.',
+                    ];
+                }
+                else if (detectedCategory === 'Appliance') {
+                    tips = [
+                        'Garbage disposal: press the small red RESET button located underneath the disposal body under sink.',
+                        'Dryer: clean lint trap filter thoroughly and inspect rear exhaust duct connection.',
+                        'Unplug appliance for 60 seconds to reset internal electronic control boards.',
+                    ];
+                }
+                else {
+                    tips = [
+                        'Check for any loose screws, obstructions, or debris blocking hinges/tracks.',
+                        'Ensure power cords or switches nearby are securely plugged in.',
+                        'Take a clear photo/video of the issue to attach to your ticket for faster service.',
+                    ];
+                }
+            }
+            return (0, apiResponse_1.sendSuccess)({
+                res,
+                data: {
+                    tips,
+                    category: detectedCategory,
+                    emergencyAlert,
+                    suggestionTitle: `Instant DIY Troubleshooting Tips for ${detectedCategory}`,
+                },
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
 }
 exports.serviceRequestController = new ServiceRequestController();
