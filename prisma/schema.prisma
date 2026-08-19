@@ -727,6 +727,7 @@ model SaaSInvoice {
   status      String    @default("Paid")
   dueDate     DateTime
   paidDate    DateTime?
+  transactionId String?
   createdAt   DateTime  @default(now())
   company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
 

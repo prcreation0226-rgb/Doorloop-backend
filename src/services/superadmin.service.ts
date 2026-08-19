@@ -38,6 +38,7 @@ export class SuperAdminService {
     cardExpiry?: string;
     cardCvv?: string;
     cardName?: string;
+    transactionId?: string;
   }) {
     let code = data.code || data.name.substring(0, 4).toUpperCase().trim();
     if (!code || code.length < 2) {
@@ -62,27 +63,18 @@ export class SuperAdminService {
       planPrice = 199;
     }
 
-    // 1. Process Subscription Payment via Authorize.Net Gateway
-    let gatewayTxId = `AUTHNET-SIM-${Math.floor(100000000 + Math.random() * 900000000)}`;
-    let gatewayMessage = 'Superadmin Subscription Activated';
-    try {
-      const authNetResult = await authorizeNetService.chargePayment({
-        amount: planPrice,
-        cardNumber: data.cardNumber,
-        expirationDate: data.cardExpiry,
-        cvv: data.cardCvv,
-        nameOnAccount: data.cardName || data.contactName,
-        description: `SaaS Subscription (${planName}) for ${data.name}`,
-      });
-      if (authNetResult.transactionId) {
-        gatewayTxId = authNetResult.transactionId;
-      }
-      if (authNetResult.message) {
-        gatewayMessage = authNetResult.message;
-      }
-    } catch (e) {
-      console.warn('Authorize.Net Subscription Payment Fallback:', e);
+    // 1. Process & Verify Subscription Payment via Authorize.Net Gateway
+    let gatewayTxId = data.transactionId || '';
+    if (!gatewayTxId) {
+      throw new Error('Payment Transaction ID is required for registration.');
     }
+
+    const verifyResult = await authorizeNetService.verifyTransaction(gatewayTxId);
+    if (!verifyResult.success) {
+      throw new Error(`Payment verification failed: ${verifyResult.message}`);
+    }
+
+    planPrice = verifyResult.amount || planPrice;
 
     // 2. Create Company with Active status
     let company = await prisma.company.findFirst({ where: { email: data.email } });
@@ -115,6 +107,7 @@ export class SuperAdminService {
         status: 'Paid',
         dueDate: new Date(),
         paidDate: new Date(),
+        transactionId: gatewayTxId,
       });
     } catch (invErr) {
       console.warn('Could not log superadmin subscription invoice:', invErr);
@@ -521,7 +514,7 @@ export class SuperAdminService {
     });
   }
 
-  async createInvoice(data: { companyId?: string; companyName: string; amount: number; status?: string; dueDate?: string | Date; paidDate?: string | Date }) {
+  async createInvoice(data: { companyId?: string; companyName: string; amount: number; status?: string; dueDate?: string | Date; paidDate?: string | Date; transactionId?: string }) {
     let companyId = data.companyId;
     if (!companyId) {
       const existing = await prisma.company.findFirst({ where: { name: data.companyName } });
@@ -541,6 +534,7 @@ export class SuperAdminService {
         status: data.status || 'Paid',
         dueDate: data.dueDate ? new Date(data.dueDate) : new Date(),
         paidDate: data.paidDate ? new Date(data.paidDate) : (data.status === 'Paid' ? new Date() : null),
+        transactionId: data.transactionId || null,
       },
     });
   }
