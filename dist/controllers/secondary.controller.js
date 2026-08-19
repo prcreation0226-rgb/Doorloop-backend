@@ -80,9 +80,8 @@ class SecondaryController {
     }
     async markNotificationRead(req, res, next) {
         try {
-            const companyId = req.user?.companyId;
             const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-            const item = await secondary_service_1.secondaryService.markNotificationRead(id, companyId);
+            const item = await secondary_service_1.secondaryService.markNotificationRead(id);
             return (0, apiResponse_1.sendSuccess)({ res, data: item });
         }
         catch (error) {
@@ -113,9 +112,8 @@ class SecondaryController {
     // AI Chat
     async processAiChat(req, res, next) {
         try {
-            const companyId = req.user?.companyId;
             const { prompt } = req.body;
-            const result = await secondary_service_1.secondaryService.processAiChat(prompt || 'Show summary', companyId);
+            const result = await secondary_service_1.secondaryService.processAiChat(prompt || 'Show summary', req.user);
             return (0, apiResponse_1.sendSuccess)({ res, data: result });
         }
         catch (error) {

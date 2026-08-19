@@ -2211,7 +2211,7 @@ export class PortalController {
   async uploadScreeningDocument(req: Request, res: Response, next: NextFunction) {
     try {
       const id = req.params.id as string;
-      const file = req.file;
+      const file = (req as any).file;
 
       if (!file) {
         return res.status(400).json({
@@ -2239,15 +2239,15 @@ export class PortalController {
         documentUrl = result?.secure_url || '';
       } catch (err) {
         console.warn('Cloudinary upload failed, falling back to base64 data URI:', err);
-        const base64Data = file.buffer.toString('base64');
-        documentUrl = `data:${file.mimetype};base64,${base64Data}`;
+        const base64Data = file.buffer ? file.buffer.toString('base64') : '';
+        documentUrl = `data:${file.mimetype || 'application/pdf'};base64,${base64Data}`;
       }
 
-      const report = await prisma.screeningReport.update({
+      const report = await (prisma.screeningReport as any).update({
         where: { id },
         data: {
           documentUrl,
-          documentName: file.originalname,
+          documentName: file?.originalname || 'screening_document',
           status: 'Pending Approval',
         },
       });

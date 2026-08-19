@@ -17,6 +17,9 @@ const envSchema = z.object({
   CLOUDINARY_CLOUD_NAME: z.string().optional().default(''),
   CLOUDINARY_API_KEY: z.string().optional().default(''),
   CLOUDINARY_API_SECRET: z.string().optional().default(''),
+  OPENAI_API_KEY: z.string().optional().default(''),
+  OPENAI_MODEL: z.string().optional().default('gpt-4o'),
+  OPENAI_ORG_ID: z.string().optional().default(''),
 });
 
 export const env = envSchema.parse(process.env);

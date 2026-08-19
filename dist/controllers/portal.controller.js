@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.portalController = exports.PortalController = void 0;
 const database_1 = __importDefault(require("../config/database"));
 const apiResponse_1 = require("../utils/apiResponse");
+const cloudinary_1 = __importDefault(require("../config/cloudinary"));
 class PortalController {
     // --- Helper to get tenant for logged in user ---
     async getTenantForUser(req) {
@@ -1013,6 +1014,38 @@ class PortalController {
             next(error);
         }
     }
+    async getScreeningReportById(req, res, next) {
+        try {
+            const id = req.params.id;
+            const report = await database_1.default.screeningReport.findUnique({
+                where: { id },
+                include: {
+                    tenant: {
+                        include: {
+                            unit: {
+                                include: {
+                                    property: true,
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            if (!report) {
+                return res.status(404).json({
+                    success: false,
+                    error: {
+                        code: 'NOT_FOUND',
+                        message: 'Screening report not found.',
+                    },
+                });
+            }
+            return (0, apiResponse_1.sendSuccess)({ res, data: report });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
     async createScreeningReport(req, res, next) {
         try {
             let { tenantId, firstName, lastName, email, phoneNumber, phone, unitId, creditScore, criminalPass, evictionPass, status } = req.body;
@@ -1046,14 +1079,14 @@ class PortalController {
                 });
             }
             const parsedCreditScore = parseInt(creditScore);
-            const finalCreditScore = isNaN(parsedCreditScore) ? Math.floor(Math.random() * (800 - 680 + 1)) + 680 : parsedCreditScore;
+            const finalCreditScore = isNaN(parsedCreditScore) ? 0 : parsedCreditScore;
             const report = await database_1.default.screeningReport.create({
                 data: {
                     tenantId,
                     creditScore: finalCreditScore,
                     criminalPass: criminalPass ?? true,
                     evictionPass: evictionPass ?? true,
-                    status: status || 'Processing',
+                    status: status || 'Pending Documents',
                     companyId,
                 },
             });
@@ -2002,8 +2035,16 @@ class PortalController {
     async updateScreeningReport(req, res, next) {
         try {
             const id = req.params.id;
-            const { status } = req.body;
-            const updateData = { status };
+            const { status, dob, ssn, authorized } = req.body;
+            const updateData = {};
+            if (status !== undefined)
+                updateData.status = status;
+            if (dob !== undefined)
+                updateData.dob = dob;
+            if (ssn !== undefined)
+                updateData.ssn = ssn;
+            if (authorized !== undefined)
+                updateData.authorized = authorized;
             if (status === 'Completed') {
                 updateData.creditScore = 720;
                 updateData.criminalPass = true;
@@ -2049,6 +2090,51 @@ class PortalController {
                 }
             }
             return (0, apiResponse_1.sendSuccess)({ res, data: report });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    async uploadScreeningDocument(req, res, next) {
+        try {
+            const id = req.params.id;
+            const file = req.file;
+            if (!file) {
+                return res.status(400).json({
+                    success: false,
+                    error: {
+                        code: 'BAD_REQUEST',
+                        message: 'No document file uploaded.'
+                    }
+                });
+            }
+            // Upload file to Cloudinary if setup, else fall back to base64 string
+            let documentUrl = '';
+            try {
+                const result = await new Promise((resolve, reject) => {
+                    const uploadStream = cloudinary_1.default.uploader.upload_stream({ folder: 'tenant-screening' }, (error, result) => {
+                        if (error)
+                            return reject(error);
+                        resolve(result);
+                    });
+                    uploadStream.end(file.buffer);
+                });
+                documentUrl = result?.secure_url || '';
+            }
+            catch (err) {
+                console.warn('Cloudinary upload failed, falling back to base64 data URI:', err);
+                const base64Data = file.buffer ? file.buffer.toString('base64') : '';
+                documentUrl = `data:${file.mimetype || 'application/pdf'};base64,${base64Data}`;
+            }
+            const report = await database_1.default.screeningReport.update({
+                where: { id },
+                data: {
+                    documentUrl,
+                    documentName: file?.originalname || 'screening_document',
+                    status: 'Pending Approval',
+                },
+            });
+            return (0, apiResponse_1.sendSuccess)({ res, data: report, message: 'Document uploaded successfully.' });
         }
         catch (error) {
             next(error);

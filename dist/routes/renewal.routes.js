@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const renewal_controller_1 = require("../controllers/renewal.controller");
+const router = (0, express_1.Router)();
+router.get('/', (req, res, next) => renewal_controller_1.renewalController.getAll(req, res, next));
+router.post('/send-offer', (req, res, next) => renewal_controller_1.renewalController.sendOffer(req, res, next));
+router.post('/update', (req, res, next) => renewal_controller_1.renewalController.update(req, res, next));
+router.post('/accept', (req, res, next) => renewal_controller_1.renewalController.accept(req, res, next));
+router.post('/reject', (req, res, next) => renewal_controller_1.renewalController.reject(req, res, next));
+exports.default = router;

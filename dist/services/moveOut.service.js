@@ -275,40 +275,45 @@ class MoveOutService {
                     completedDate: new Date(),
                 },
             });
-            // 2. Update Lease status to Ended
-            await tx.lease.update({
-                where: { id: moveOut.leaseId },
-                data: {
-                    status: 'Ended',
-                },
-            });
-            // 3. Update Unit status to Vacant
+            // 2. Update Unit status to Vacant
             await tx.unit.update({
                 where: { id: moveOut.unitId },
                 data: {
                     status: 'Vacant',
                 },
             });
-            // 4. Update Tenant status to Inactive
+            // 3. Update Tenant status to Inactive and clear unitId
             await tx.tenant.update({
                 where: { id: moveOut.lease.tenantId },
                 data: {
                     status: 'Inactive',
+                    unitId: null,
+                },
+            });
+            // 4. Update Lease status to Ended
+            await tx.lease.update({
+                where: { id: moveOut.leaseId },
+                data: {
+                    status: 'Ended',
                 },
             });
             const validUserId = await (0, auditHelper_1.getValidUserId)(userId, tx);
-            // 5. Create Audit Log
+            // 6. Create Audit Log
             await tx.auditLog.create({
                 data: {
-                    action: 'Move Out Completed & Lease Ended',
+                    action: 'Move Out Completed & Leases/Screenings Cleared',
                     userId: validUserId,
                     module: 'Leasing',
-                    object: `MoveOut ${id}`,
+                    object: `Tenant ${moveOut.lease.tenantId}`,
                     ip: '127.0.0.1',
                     status: 'Success',
                 },
             });
-            return updatedMoveOut;
+            return {
+                ...moveOut,
+                status: 'COMPLETED',
+                completedDate: new Date(),
+            };
         });
     }
     async cancelMoveOut(id, reason, userId, companyId) {

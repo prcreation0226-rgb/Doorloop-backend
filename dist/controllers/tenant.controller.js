@@ -212,13 +212,46 @@ class TenantController {
             if (companyId && tenant.companyId !== companyId) {
                 throw new appError_js_1.AppError('Tenant not found.', 404, 'NOT_FOUND');
             }
-            if (tenant.email) {
-                await database_js_1.default.user.deleteMany({
-                    where: { email: tenant.email },
+            await database_js_1.default.$transaction(async (tx) => {
+                // 1. Delete rent payments linked to tenant
+                await tx.rentPayment.deleteMany({
+                    where: { tenantId: id },
                 });
-            }
-            await database_js_1.default.tenant.delete({
-                where: { id },
+                // 2. Delete invoices linked to tenant
+                await tx.invoice.deleteMany({
+                    where: { tenantId: id },
+                });
+                // 3. Delete leases linked to tenant (MoveIn, MoveOut, and LeaseRenewal have onDelete: Cascade with Lease)
+                await tx.lease.deleteMany({
+                    where: { tenantId: id },
+                });
+                // 4. Delete charges & deposits linked to tenant
+                await tx.charge.deleteMany({
+                    where: { tenantId: id },
+                });
+                await tx.deposit.deleteMany({
+                    where: { tenantId: id },
+                });
+                // 5. Delete payment plans, screening reports, insurance policies
+                await tx.paymentPlan.deleteMany({
+                    where: { tenantId: id },
+                });
+                await tx.screeningReport.deleteMany({
+                    where: { tenantId: id },
+                });
+                await tx.insurancePolicy.deleteMany({
+                    where: { tenantId: id },
+                });
+                // 6. Delete login user
+                if (tenant.email) {
+                    await tx.user.deleteMany({
+                        where: { email: tenant.email },
+                    });
+                }
+                // 7. Finally, delete the Tenant itself
+                await tx.tenant.delete({
+                    where: { id },
+                });
             });
             return (0, apiResponse_js_1.sendSuccess)({ res, data: { success: true } });
         }

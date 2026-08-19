@@ -1,4 +1,6 @@
 import prisma from '../config/database';
+import { env } from '../config/env';
+import { TokenPayload } from '../utils/jwt';
 
 export class SecondaryService {
   // Announcements
@@ -21,7 +23,7 @@ export class SecondaryService {
     });
   }
 
-  // Insurance Policies
+  // Insurance
   async getInsurancePolicies(companyId?: string) {
     return prisma.insurancePolicy.findMany({
       where: companyId ? { companyId } : {},
@@ -30,15 +32,10 @@ export class SecondaryService {
     });
   }
 
-  async createInsurancePolicy(data: { tenantId: string; policyNumber: string; provider: string; coverageAmount: number; startDate: Date; endDate: Date }, companyId?: string) {
+  async createInsurancePolicy(data: any, companyId?: string) {
     return prisma.insurancePolicy.create({
       data: {
-        tenantId: data.tenantId,
-        policyNumber: data.policyNumber,
-        provider: data.provider,
-        coverageAmount: data.coverageAmount,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
+        ...data,
         companyId,
       },
     });
@@ -52,13 +49,10 @@ export class SecondaryService {
     });
   }
 
-  async createPromotion(data: { code: string; discount: string; duration: string; maxUses?: number }, companyId?: string) {
+  async createPromotion(data: any, companyId?: string) {
     return prisma.promotion.create({
       data: {
-        code: data.code,
-        discount: data.discount,
-        duration: data.duration,
-        maxUses: data.maxUses || 100,
+        ...data,
         companyId,
       },
     });
@@ -72,11 +66,7 @@ export class SecondaryService {
     });
   }
 
-  async markNotificationRead(id: string, companyId?: string) {
-    if (companyId) {
-      const check = await prisma.notification.findFirst({ where: { id, companyId } });
-      if (!check) throw new Error('Notification not found.');
-    }
+  async markNotificationRead(id: string) {
     return prisma.notification.update({
       where: { id },
       data: { read: true },
@@ -91,7 +81,7 @@ export class SecondaryService {
     });
   }
 
-  async createDocument(data: { name: string; category?: string; fileUrl: string; fileSize?: string; uploadedBy?: string }, companyId?: string) {
+  async createDocument(data: any, companyId?: string) {
     return prisma.document.create({
       data: {
         name: data.name,
@@ -104,45 +94,236 @@ export class SecondaryService {
     });
   }
 
-  // AI Assistant Chat Response based on live DB metrics (Scoped by companyId)
-  async processAiChat(prompt: string, companyId?: string) {
-    const propertyCount = await prisma.property.count({
-      where: companyId ? { companyId } : {},
-    });
-    const unitCount = await prisma.unit.count({
-      where: companyId ? { property: { companyId } } : {},
-    });
-    const occupiedUnits = await prisma.unit.count({
-      where: {
-        status: 'Occupied',
-        ...(companyId ? { property: { companyId } } : {}),
-      },
-    });
-    const tenantCount = await prisma.tenant.count({
-      where: companyId ? { companyId } : {},
-    });
-    const occupancyRate = unitCount > 0 ? Math.round((occupiedUnits / unitCount) * 100) : 0;
+  // AI Assistant Chat Response with Strict Manager / Role Data Scoping & OpenAI Support
+  async processAiChat(prompt: string, userPayload?: TokenPayload) {
+    const userRole = userPayload?.roleName || 'Property Manager';
+    const userId = userPayload?.userId;
+    const userEmail = userPayload?.email;
 
-    const queryLower = prompt.toLowerCase();
-    let responseText = `I am your WhatsLandlord ERP AI Assistant. Currently, your portfolio consists of ${propertyCount} properties, ${unitCount} total units (${occupancyRate}% occupancy), and ${tenantCount} active tenants. How can I further assist with your property management operations?`;
-
-    if (queryLower.includes('occupancy') || queryLower.includes('units')) {
-      responseText = `Portfolio Occupancy Analysis: You have ${unitCount} total units across ${propertyCount} properties. Current occupied units: ${occupiedUnits} (${occupancyRate}% occupancy rate).`;
-    } else if (queryLower.includes('tenant') || queryLower.includes('resident')) {
-      responseText = `Tenant Overview: There are currently ${tenantCount} active tenants registered in your company.`;
-    } else if (queryLower.includes('revenue') || queryLower.includes('financial') || queryLower.includes('expense')) {
-      responseText = `Financial Summary: All transactions, rent payments, and chart of accounts are recorded live in your double-entry accounting ledger.`;
+    let companyId: string | undefined = userPayload?.companyId;
+    if (userId && !companyId) {
+      const dbUser = await prisma.user.findUnique({ where: { id: userId } });
+      companyId = dbUser?.companyId || undefined;
     }
 
-    await prisma.aiChatLog.create({
-      data: {
-        prompt,
-        response: responseText,
-        companyId,
-      },
-    });
+    let scopedContextText = '';
+    let suggestedActions: string[] = [];
+    let relatedRecords: string[] = [];
 
-    return { prompt, response: responseText };
+    // Detailed entities for rule-based parsing
+    let ownersCount = 0;
+    let ownerNames = '';
+    let propertiesCount = 0;
+    let propertyNames = '';
+    let totalUnitsCount = 0;
+    let occupiedUnitsCount = 0;
+    let vacantUnitsCount = 0;
+    let occupancyRateVal = 0;
+    let tenantsCount = 0;
+    let leasesCount = 0;
+    let overduePaymentsCount = 0;
+    let overdueTotalAmount = 0;
+    let overdueTenantDetails = '';
+    let workOrdersCount = 0;
+
+    if (userRole === 'Tenant' && userEmail) {
+      // --- TENANT DATA SCOPING ---
+      const tenant = await prisma.tenant.findFirst({
+        where: { email: userEmail },
+        include: {
+          unit: { include: { property: true } },
+          leases: { orderBy: { startDate: 'desc' }, take: 1 },
+          payments: { orderBy: { dueDate: 'desc' }, take: 5 },
+        },
+      });
+
+      if (tenant) {
+        const lease = tenant.leases[0];
+        const unitNum = tenant.unit?.unitNumber || 'N/A';
+        const propName = tenant.unit?.property?.name || 'N/A';
+        const unpaid = tenant.payments.filter((p) => (p.status as string) === 'Pending');
+        const overdueSum = unpaid.reduce((sum, p) => sum + p.amount, 0);
+
+        scopedContextText = `User Role: Tenant (${tenant.firstName} ${tenant.lastName}). Property: ${propName}, Unit: ${unitNum}. Active Lease: Rent $${lease?.rentAmount || 0}/mo ending ${lease?.endDate ? lease.endDate.toISOString().split('T')[0] : 'N/A'}. Outstanding Overdue Balance: $${overdueSum}.`;
+        suggestedActions = ['Pay Overdue Rent', 'Submit Maintenance Request', 'View Lease Document'];
+        relatedRecords = [`Unit: ${unitNum}`, `Property: ${propName}`];
+      } else {
+        scopedContextText = `User Role: Tenant (${userEmail}). No tenant record found.`;
+      }
+    } else if (userRole === 'Owner' && userEmail) {
+      // --- OWNER DATA SCOPING ---
+      const owner = await prisma.owner.findFirst({
+        where: { email: userEmail },
+        include: {
+          properties: true,
+          distributions: { take: 5, orderBy: { processedDate: 'desc' } },
+        },
+      });
+
+      if (owner) {
+        propertiesCount = owner.properties.length;
+        propertyNames = owner.properties.map((p) => p.name).join(', ');
+        const totalDistributions = owner.distributions.reduce((sum, d) => sum + d.amount, 0);
+
+        scopedContextText = `User Role: Property Owner (${owner.name}). Properties Owned (${propertiesCount}): [${propertyNames}]. Total Distributions Received: $${totalDistributions}. Payout Method: ${owner.payoutMethod}.`;
+        suggestedActions = ['View Owner Statement', 'Check Property Occupancy', 'Download Distribution Report'];
+        relatedRecords = owner.properties.map((p) => `Property: ${p.name}`);
+      } else {
+        scopedContextText = `User Role: Property Owner (${userEmail}). No owner record found.`;
+      }
+    } else {
+      // --- MANAGER / STAFF DATA SCOPING (STRICT BY COMPANY ID) ---
+      const companyFilter = companyId ? { companyId } : {};
+      const unitWhere = companyId ? { property: { companyId } } : {};
+
+      const [
+        properties,
+        totalUnits,
+        occupiedUnits,
+        activeTenantsCount,
+        activeLeasesCount,
+        overduePayments,
+        openWorkOrders,
+        owners,
+      ] = await Promise.all([
+        prisma.property.findMany({ where: companyFilter, select: { id: true, name: true, unitsCount: true } }),
+        prisma.unit.count({ where: unitWhere }),
+        prisma.unit.count({ where: { ...unitWhere, status: 'Occupied' } }),
+        prisma.tenant.count({ where: companyFilter }),
+        prisma.lease.count({ where: { ...companyFilter, status: 'Active' as any } }),
+        (prisma.rentPayment as any).findMany({
+          where: { ...companyFilter, status: 'Pending' },
+          include: { tenant: { select: { firstName: true, lastName: true } }, property: { select: { name: true } } },
+          take: 5,
+        }),
+        prisma.workOrder.findMany({
+          where: { ...companyFilter, status: 'Open' },
+          select: { title: true, priority: true },
+          take: 5,
+        }),
+        prisma.owner.findMany({
+          where: companyFilter,
+          select: { id: true, name: true, email: true, companyName: true },
+        }),
+      ]);
+
+      ownersCount = owners.length;
+      ownerNames = owners.map((o) => o.name || o.email || 'Unnamed Owner').filter(Boolean).join(', ');
+      propertiesCount = properties.length;
+      propertyNames = properties.map((p) => p.name).slice(0, 10).join(', ');
+      totalUnitsCount = totalUnits;
+      occupiedUnitsCount = occupiedUnits;
+      vacantUnitsCount = Math.max(0, totalUnits - occupiedUnits);
+      occupancyRateVal = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
+      tenantsCount = activeTenantsCount;
+      leasesCount = activeLeasesCount;
+      overduePaymentsCount = overduePayments.length;
+      overdueTotalAmount = (overduePayments as any[]).reduce((sum, p) => sum + (p.amount || 0), 0);
+      overdueTenantDetails = (overduePayments as any[])
+        .map((p) => `${p.tenant?.firstName || ''} ${p.tenant?.lastName || ''} ($${p.amount})`)
+        .join(', ');
+      workOrdersCount = openWorkOrders.length;
+
+      scopedContextText = `User Role: ${userRole} (Company ID: ${companyId || 'Global'}). Company Owners (${ownersCount}): [${ownerNames || 'None'}]. Portfolio: ${propertiesCount} Properties ([${propertyNames || 'None'}]), ${totalUnitsCount} Total Units (${occupiedUnitsCount} Occupied, ${vacantUnitsCount} Vacant, ${occupancyRateVal}% Occupancy Rate), ${tenantsCount} Active Tenants, ${leasesCount} Active Leases. Overdue Rent: ${overduePaymentsCount} tenants owing total $${overdueTotalAmount} (${overdueTenantDetails || 'None'}). Open Work Orders: ${workOrdersCount} pending.`;
+
+      suggestedActions = ['Show Overdue Rent Details', 'View Vacant Units', 'Check Maintenance Requests', 'Generate Rent Roll'];
+      relatedRecords = properties.map((p) => `Property: ${p.name}`);
+    }
+
+    // --- CALL OPENAI API IF KEY IS CONFIGURED ---
+    let responseText = '';
+    const openAiApiKey = env.OPENAI_API_KEY || process.env.OPENAI_API_KEY || '';
+
+    if (openAiApiKey && openAiApiKey !== 'your_openai_api_key_here' && openAiApiKey.trim().length > 10) {
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openAiApiKey.trim()}`,
+        };
+
+        if (env.OPENAI_ORG_ID || process.env.OPENAI_ORG_ID) {
+          headers['OpenAI-Organization'] = (env.OPENAI_ORG_ID || process.env.OPENAI_ORG_ID || '').trim();
+        }
+
+        const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model: env.OPENAI_MODEL || 'gpt-4o',
+            messages: [
+              {
+                role: 'system',
+                content: `You are the WhatsLandlord ERP AI Assistant. You assist property managers, owners, and tenants with rental operations. Answer user questions strictly based on the following isolated live database context. Never expose or reveal data from other companies or managers.\n\nLIVE SCOPED CONTEXT:\n${scopedContextText}`,
+              },
+              { role: 'user', content: prompt },
+            ],
+            temperature: 0.3,
+            max_tokens: 700,
+          }),
+        });
+
+        if (aiResponse.ok) {
+          const aiJson: any = await aiResponse.json();
+          responseText = aiJson.choices?.[0]?.message?.content?.trim() || '';
+        } else {
+          console.warn('[AI Assistant] OpenAI API returned error status:', aiResponse.status);
+        }
+      } catch (err) {
+        console.error('[AI Assistant] OpenAI API call failed, using fallback engine:', err);
+      }
+    }
+
+    // --- SMART RULE-BASED FALLBACK RESPONDER (SPECIFIC PER QUESTION TYPE) ---
+    if (!responseText) {
+      const q = prompt.toLowerCase();
+
+      if (q.includes('owner') || q.includes('owners')) {
+        responseText = ownersCount > 0
+          ? `Owner Information: There are currently ${ownersCount} registered property owner(s) in your company: ${ownerNames}.`
+          : `Owner Information: There are no registered property owners currently found in your company.`;
+      } else if (q.includes('property') || q.includes('properties') || q.includes('building')) {
+        responseText = propertiesCount > 0
+          ? `Properties Overview: You currently manage ${propertiesCount} properties in your portfolio: ${propertyNames}.`
+          : `Properties Overview: No properties found in your company portfolio.`;
+      } else if (q.includes('overdue') || q.includes('late') || q.includes('unpaid') || q.includes('delinquent')) {
+        responseText = overduePaymentsCount > 0
+          ? `Overdue Rent Details: You have ${overduePaymentsCount} tenant(s) with overdue rent balances totaling $${overdueTotalAmount}. Pending accounts: ${overdueTenantDetails}.`
+          : `Overdue Rent Details: Excellent! There are no overdue rent balances currently recorded for your company.`;
+      } else if (q.includes('occupancy') || q.includes('vacant') || q.includes('unit') || q.includes('units')) {
+        responseText = `Units & Occupancy Summary: Your portfolio has ${totalUnitsCount} total units. Currently, ${occupiedUnitsCount} units are occupied and ${vacantUnitsCount} units are vacant (${occupancyRateVal}% occupancy rate).`;
+      } else if (q.includes('maintenance') || q.includes('work order') || q.includes('repair') || q.includes('staff')) {
+        responseText = workOrdersCount > 0
+          ? `Maintenance Work Orders: There are currently ${workOrdersCount} open maintenance work orders pending resolution.`
+          : `Maintenance Work Orders: All clear! There are no open maintenance work orders pending right now.`;
+      } else if (q.includes('tenant') || q.includes('resident') || q.includes('lease')) {
+        responseText = `Tenants & Leases Overview: Your company has ${tenantsCount} active tenants and ${leasesCount} active leases on file.`;
+      } else if (q.includes('financial') || q.includes('revenue') || q.includes('report') || q.includes('statement')) {
+        responseText = `Financial Metrics: Live double-entry accounting records are active. Total overdue rent outstanding is $${overdueTotalAmount} across ${overduePaymentsCount} delinquent accounts.`;
+      } else {
+        responseText = `Hello! I am your WhatsLandlord AI Assistant.\n\nYour Portfolio Status:\n- Properties: ${propertiesCount}\n- Total Units: ${totalUnitsCount} (${occupancyRateVal}% occupied, ${vacantUnitsCount} vacant)\n- Active Tenants: ${tenantsCount}\n- Registered Owners: ${ownersCount}\n- Open Work Orders: ${workOrdersCount}\n\nHow can I further assist you with your property management operations?`;
+      }
+    }
+
+    // --- SAVE CHAT LOG IN DATABASE ---
+    try {
+      await prisma.aiChatLog.create({
+        data: {
+          prompt,
+          response: responseText,
+          userId,
+          companyId,
+        },
+      });
+    } catch (e) {
+      console.warn('[AI Assistant] Could not save AiChatLog:', e);
+    }
+
+    return {
+      prompt,
+      response: responseText,
+      suggestedActions,
+      relatedRecords: relatedRecords.slice(0, 5),
+    };
   }
 }
 

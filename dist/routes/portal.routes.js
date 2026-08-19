@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const portal_controller_1 = require("../controllers/portal.controller");
+const upload_middleware_1 = require("../middlewares/upload.middleware");
 const router = (0, express_1.Router)();
 // Tenant Portal Views
 router.get('/tenant/leases', (req, res, next) => portal_controller_1.portalController.getTenantLeases(req, res, next));
@@ -41,8 +42,10 @@ router.post('/collections/payment-plans', (req, res, next) => portal_controller_
 router.get('/crm/leads', (req, res, next) => portal_controller_1.portalController.getCrmLeads(req, res, next));
 router.post('/crm/leads', (req, res, next) => portal_controller_1.portalController.createCrmLead(req, res, next));
 router.get('/screening/reports', (req, res, next) => portal_controller_1.portalController.getScreeningReports(req, res, next));
+router.get('/screening/reports/:id', (req, res, next) => portal_controller_1.portalController.getScreeningReportById(req, res, next));
 router.post('/screening/reports', (req, res, next) => portal_controller_1.portalController.createScreeningReport(req, res, next));
 router.put('/screening/reports/:id', (req, res, next) => portal_controller_1.portalController.updateScreeningReport(req, res, next));
+router.post('/screening/reports/:id/upload', upload_middleware_1.uploadScreeningReportDoc.single('document'), (req, res, next) => portal_controller_1.portalController.uploadScreeningDocument(req, res, next));
 router.get('/violations', (req, res, next) => portal_controller_1.portalController.getViolations(req, res, next));
 router.post('/violations', (req, res, next) => portal_controller_1.portalController.createViolation(req, res, next));
 // General Dashboard User Profile Views

@@ -80,9 +80,8 @@ export class SecondaryController {
 
   async markNotificationRead(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const companyId = req.user?.companyId;
       const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-      const item = await secondaryService.markNotificationRead(id, companyId);
+      const item = await secondaryService.markNotificationRead(id);
       return sendSuccess({ res, data: item });
     } catch (error) {
       next(error);
@@ -113,9 +112,8 @@ export class SecondaryController {
   // AI Chat
   async processAiChat(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const companyId = req.user?.companyId;
       const { prompt } = req.body;
-      const result = await secondaryService.processAiChat(prompt || 'Show summary', companyId);
+      const result = await secondaryService.processAiChat(prompt || 'Show summary', req.user);
       return sendSuccess({ res, data: result });
     } catch (error) {
       next(error);
