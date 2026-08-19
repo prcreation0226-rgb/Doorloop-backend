@@ -1,0 +1,41 @@
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load .env from backend root
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+import { authorizeNetService } from '../services/authorizeNet.service';
+
+async function runTest() {
+  console.log('--- Authorize.Net Integration Test ---');
+  console.log('Env Mode:', process.env.AUTHORIZE_NET_ENV);
+  console.log('API Login ID:', process.env.AUTHORIZE_NET_API_LOGIN_ID);
+  console.log('Transaction Key Length:', process.env.AUTHORIZE_NET_TRANSACTION_KEY?.length || 0);
+
+  if (!process.env.AUTHORIZE_NET_API_LOGIN_ID || process.env.AUTHORIZE_NET_API_LOGIN_ID === '5n8X9kKz2') {
+    console.log('\n⚠️ WARNING: Using dummy simulated credentials. Please replace them in your backend `.env` file first.');
+  }
+
+  try {
+    console.log('\nRequesting Hosted Payment Page Token from Authorize.Net...');
+    const result = await authorizeNetService.getHostedPaymentToken({
+      amount: 200.00,
+      planName: 'Pro Plan',
+      description: 'SaaS Subscription Integration Test',
+    });
+
+    console.log('\nResponse Received:');
+    console.log('- Token:', result.token);
+    console.log('- Hosted URL:', result.hostedUrl);
+
+    if (result.token.startsWith('HOSTED-TOKEN-SIM-')) {
+      console.log('\nℹ️ Simulated/offline token returned (falling back because dummy/simulated keys are still active).');
+    } else {
+      console.log('\n✅ Connection Successful! A real Authorize.Net Sandbox token was fetched successfully.');
+    }
+  } catch (err: any) {
+    console.error('\n❌ Connection Error: Failed to fetch hosted payment page token:', err);
+  }
+}
+
+runTest();
