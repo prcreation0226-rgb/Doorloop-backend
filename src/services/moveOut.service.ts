@@ -307,14 +307,12 @@ export class MoveOutService {
         },
       });
 
-      // 4. Delete screening reports of the tenant
-      await tx.screeningReport.deleteMany({
-        where: { tenantId: moveOut.lease.tenantId },
-      });
-
-      // 5. Delete leases of the tenant (cascades to delete moveOuts, moveIns, renewals)
-      await tx.lease.deleteMany({
-        where: { tenantId: moveOut.lease.tenantId },
+      // 4. Update Lease status to Ended
+      await tx.lease.update({
+        where: { id: moveOut.leaseId },
+        data: {
+          status: 'Ended',
+        },
       });
 
       const validUserId = await getValidUserId(userId, tx);
