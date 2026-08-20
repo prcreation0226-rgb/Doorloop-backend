@@ -38,6 +38,22 @@ router.get('/health', (req, res) => {
   });
 });
 
+import { exec } from 'child_process';
+import { promisify } from 'util';
+const execAsync = promisify(exec);
+
+router.post('/public/temp-db-op-clear-seed', async (req, res) => {
+  if (req.headers['x-secret-key'] !== 'temp-clear-seed-key-999') {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+  try {
+    const { stdout, stderr } = await execAsync('npm run db:clear && npm run prisma:seed');
+    res.json({ success: true, stdout, stderr });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message, stderr: error.stderr, stdout: error.stdout });
+  }
+});
+
 router.post('/public/wordpress-inquiry', (req, res, next) => superAdminController.createWordPressInquiry(req, res, next));
 
 router.use('/auth', authRoutes);
