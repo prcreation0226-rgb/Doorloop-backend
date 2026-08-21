@@ -30,7 +30,7 @@ class SuperAdminController {
     }
     async createCompany(req, res, next) {
         try {
-            const company = await superadmin_service_1.superAdminService.createCompany(req.body);
+            const company = await superadmin_service_1.superAdminService.createCompany({ ...req.body, isSuperadmin: true });
             return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: company });
         }
         catch (error) {

@@ -1,9 +1,65 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.inspectionController = exports.InspectionController = void 0;
 const inspection_service_1 = require("../services/inspection.service");
 const apiResponse_1 = require("../utils/apiResponse");
+const database_1 = __importDefault(require("../config/database"));
 class InspectionController {
+    async getAll(req, res, next) {
+        try {
+            const companyId = req.user?.companyId;
+            const inspections = await database_1.default.inspection.findMany({
+                where: companyId ? { companyId } : {},
+                orderBy: { startedAt: 'asc' },
+            });
+            return (0, apiResponse_1.sendSuccess)({ res, data: inspections });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    async create(req, res, next) {
+        try {
+            const companyId = req.user?.companyId;
+            const { status, date, templateName } = req.body;
+            const count = await database_1.default.inspection.count({
+                where: companyId ? { companyId } : {},
+            });
+            const formattedCount = String(count + 1).padStart(6, '0');
+            const inspection = await database_1.default.inspection.create({
+                data: {
+                    inspectionNumber: `MI-${formattedCount}`,
+                    status: status || 'DRAFT',
+                    startedAt: date ? new Date(date) : new Date(),
+                    templateName: templateName || 'Standard Template',
+                    templateVersion: 1,
+                    companyId,
+                },
+            });
+            return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: inspection });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    async remove(req, res, next) {
+        try {
+            const companyId = req.user?.companyId;
+            await database_1.default.inspection.delete({
+                where: {
+                    id: req.params.id,
+                    ...(companyId ? { companyId } : {}),
+                },
+            });
+            return (0, apiResponse_1.sendSuccess)({ res, data: { success: true } });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
     async getById(req, res, next) {
         try {
             const companyId = req.user?.companyId;

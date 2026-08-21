@@ -7,6 +7,8 @@ const router = (0, express_1.Router)();
 // Tenant Portal Views
 router.get('/tenant/leases', (req, res, next) => portal_controller_1.portalController.getTenantLeases(req, res, next));
 router.get('/tenant/lease', (req, res, next) => portal_controller_1.portalController.getTenantLease(req, res, next));
+router.post('/tenant/lease/ai-qa', (req, res, next) => portal_controller_1.portalController.askLeaseAi(req, res, next));
+router.post('/tenant/ai-concierge', (req, res, next) => portal_controller_1.portalController.tenantAiConcierge(req, res, next));
 router.get('/tenant/metrics', (req, res, next) => portal_controller_1.portalController.getTenantMetrics(req, res, next));
 router.get('/tenant/profile', (req, res, next) => portal_controller_1.portalController.getTenantProfile(req, res, next));
 router.post('/tenant/profile', (req, res, next) => portal_controller_1.portalController.updateTenantProfile(req, res, next));

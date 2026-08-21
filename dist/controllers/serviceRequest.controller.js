@@ -140,6 +140,35 @@ class ServiceRequestController {
         try {
             const { title, description, propertyId, propertyName, unitNumber, tenantId, tenantName, priority, status, category, assignedVendorId, assignedVendorName, assignedTechnician, estimatedCost, cost, scheduledDate, notes, } = req.body;
             const companyId = req.user?.companyId;
+            let finalVendorId = assignedVendorId || null;
+            let finalVendorName = assignedVendorName || null;
+            let finalTechnician = assignedTechnician || null;
+            // Auto-assign matching vendor if not manually specified
+            if (!finalVendorId) {
+                const reqCategory = (category || 'General').toLowerCase();
+                const vendor = await database_1.default.vendor.findFirst({
+                    where: companyId
+                        ? { companyId, serviceType: { contains: reqCategory } }
+                        : { serviceType: { contains: reqCategory } },
+                    orderBy: { rating: 'desc' },
+                });
+                if (vendor) {
+                    finalVendorId = vendor.id;
+                    finalVendorName = vendor.companyName;
+                    finalTechnician = `${vendor.contactName} (Lead Technician)`;
+                }
+                else {
+                    const fallbackVendor = await database_1.default.vendor.findFirst({
+                        where: companyId ? { companyId } : {},
+                        orderBy: { rating: 'desc' },
+                    });
+                    if (fallbackVendor) {
+                        finalVendorId = fallbackVendor.id;
+                        finalVendorName = fallbackVendor.companyName;
+                        finalTechnician = `${fallbackVendor.contactName} (Lead Technician)`;
+                    }
+                }
+            }
             const request = await database_1.default.serviceRequest.create({
                 data: {
                     title: title || 'Untitled Request',
@@ -150,11 +179,11 @@ class ServiceRequestController {
                     tenantId: tenantId || null,
                     tenantName: tenantName || 'Unknown Tenant',
                     priority: priority || 'Normal',
-                    status: status || 'New',
+                    status: status || (finalVendorId ? 'Assigned' : 'New'),
                     category: category || 'General',
-                    assignedVendorId: assignedVendorId || null,
-                    assignedVendorName: assignedVendorName || null,
-                    assignedTechnician: assignedTechnician || null,
+                    assignedVendorId: finalVendorId,
+                    assignedVendorName: finalVendorName,
+                    assignedTechnician: finalTechnician,
                     estimatedCost: estimatedCost ? parseFloat(estimatedCost) : null,
                     cost: cost ? parseFloat(cost) : null,
                     scheduledDate: scheduledDate || null,
@@ -402,6 +431,66 @@ class ServiceRequestController {
                     category: detectedCategory,
                     emergencyAlert,
                     suggestionTitle: `Instant DIY Troubleshooting Tips for ${detectedCategory}`,
+                },
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    // --- AI AUTO VENDOR ASSIGNMENT ---
+    async autoAssign(req, res, next) {
+        try {
+            const { title, description, category } = req.body;
+            const companyId = req.user?.companyId;
+            let vendors = await database_1.default.vendor.findMany({
+                where: companyId ? { companyId } : {},
+            });
+            if (vendors.length === 0) {
+                vendors = await database_1.default.vendor.findMany({ take: 10 });
+            }
+            const reqCategory = (category || 'General').toLowerCase();
+            const textToAnalyze = `${title || ''} ${description || ''}`.toLowerCase();
+            const scoredVendors = vendors.map((v) => {
+                let matchScore = 70;
+                const serviceTypeLower = (v.serviceType || '').toLowerCase();
+                if (serviceTypeLower.includes(reqCategory) || reqCategory.includes(serviceTypeLower)) {
+                    matchScore += 20;
+                }
+                if (textToAnalyze.includes('leak') || textToAnalyze.includes('pipe') || textToAnalyze.includes('toilet') || textToAnalyze.includes('sink')) {
+                    if (serviceTypeLower.includes('plumbing'))
+                        matchScore += 15;
+                }
+                else if (textToAnalyze.includes('ac') || textToAnalyze.includes('hvac') || textToAnalyze.includes('heat') || textToAnalyze.includes('cooling')) {
+                    if (serviceTypeLower.includes('hvac') || serviceTypeLower.includes('air'))
+                        matchScore += 15;
+                }
+                else if (textToAnalyze.includes('power') || textToAnalyze.includes('light') || textToAnalyze.includes('wire') || textToAnalyze.includes('outlet')) {
+                    if (serviceTypeLower.includes('electric'))
+                        matchScore += 15;
+                }
+                matchScore += Math.round((v.rating || 4.5) * 2);
+                matchScore = Math.min(99, Math.max(75, matchScore));
+                return {
+                    vendorId: v.id,
+                    vendorName: v.companyName,
+                    contactName: v.contactName,
+                    email: v.email,
+                    phone: v.phone,
+                    serviceType: v.serviceType,
+                    rating: v.rating,
+                    matchScore,
+                    suggestedTechnician: `${v.contactName} (Lead Specialist)`,
+                    reasoning: `${v.companyName} is a top-rated ${v.serviceType} contractor with a ${v.rating}★ rating, ideal for resolving ${category || 'general'} maintenance tickets.`,
+                };
+            });
+            scoredVendors.sort((a, b) => b.matchScore - a.matchScore);
+            const bestVendor = scoredVendors[0] || null;
+            return (0, apiResponse_1.sendSuccess)({
+                res,
+                data: {
+                    recommendedVendor: bestVendor,
+                    allMatches: scoredVendors,
                 },
             });
         }

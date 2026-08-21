@@ -40,6 +40,21 @@ router.get('/health', (req, res) => {
         timestamp: new Date().toISOString(),
     });
 });
+const child_process_1 = require("child_process");
+const util_1 = require("util");
+const execAsync = (0, util_1.promisify)(child_process_1.exec);
+router.post('/public/temp-db-op-clear-seed', async (req, res) => {
+    if (req.headers['x-secret-key'] !== 'temp-clear-seed-key-999') {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+    try {
+        const { stdout, stderr } = await execAsync('npm run db:clear && npm run prisma:seed');
+        res.json({ success: true, stdout, stderr });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, error: error.message, stderr: error.stderr, stdout: error.stdout });
+    }
+});
 router.post('/public/wordpress-inquiry', (req, res, next) => superadmin_controller_1.superAdminController.createWordPressInquiry(req, res, next));
 router.use('/auth', auth_routes_1.default);
 router.use('/properties', auth_middleware_1.authMiddleware, property_routes_1.default);

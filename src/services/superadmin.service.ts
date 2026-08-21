@@ -39,6 +39,7 @@ export class SuperAdminService {
     cardCvv?: string;
     cardName?: string;
     transactionId?: string;
+    isSuperadmin?: boolean;
   }) {
     let code = data.code || data.name.substring(0, 4).toUpperCase().trim();
     if (!code || code.length < 2) {
@@ -66,15 +67,24 @@ export class SuperAdminService {
     // 1. Process & Verify Subscription Payment via Authorize.Net Gateway
     let gatewayTxId = data.transactionId || '';
     if (!gatewayTxId) {
-      throw new Error('Payment Transaction ID is required for registration.');
+      if (data.isSuperadmin) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+        gatewayTxId = `REF-${year}${month}-${randomPart}`;
+      } else {
+        throw new Error('Payment Transaction ID is required for registration.');
+      }
     }
 
-    const verifyResult = await authorizeNetService.verifyTransaction(gatewayTxId);
-    if (!verifyResult.success) {
-      throw new Error(`Payment verification failed: ${verifyResult.message}`);
+    if (!data.isSuperadmin) {
+      const verifyResult = await authorizeNetService.verifyTransaction(gatewayTxId);
+      if (!verifyResult.success) {
+        throw new Error(`Payment verification failed: ${verifyResult.message}`);
+      }
+      planPrice = verifyResult.amount || planPrice;
     }
-
-    planPrice = verifyResult.amount || planPrice;
 
     // 2. Create Company with Active status
     let company = await prisma.company.findFirst({ where: { email: data.email } });

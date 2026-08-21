@@ -5,6 +5,7 @@ const serviceRequest_controller_1 = require("../controllers/serviceRequest.contr
 const router = (0, express_1.Router)();
 router.get('/', (req, res, next) => serviceRequest_controller_1.serviceRequestController.getAll(req, res, next));
 router.post('/troubleshoot', (req, res, next) => serviceRequest_controller_1.serviceRequestController.troubleshoot(req, res, next));
+router.post('/auto-assign', (req, res, next) => serviceRequest_controller_1.serviceRequestController.autoAssign(req, res, next));
 router.get('/:id', (req, res, next) => serviceRequest_controller_1.serviceRequestController.getById(req, res, next));
 router.post('/', (req, res, next) => serviceRequest_controller_1.serviceRequestController.create(req, res, next));
 router.put('/:id', (req, res, next) => serviceRequest_controller_1.serviceRequestController.update(req, res, next));
