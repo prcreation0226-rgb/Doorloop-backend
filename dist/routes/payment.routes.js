@@ -2,7 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const payment_controller_1 = require("../controllers/payment.controller");
+const validate_middleware_1 = require("../middlewares/validate.middleware");
+const payment_validation_1 = require("../validations/payment.validation");
 const router = (0, express_1.Router)();
 router.get('/', (req, res, next) => payment_controller_1.paymentController.getAll(req, res, next));
-router.post('/', (req, res, next) => payment_controller_1.paymentController.processPayment(req, res, next));
+router.post('/', (0, validate_middleware_1.validateRequest)(payment_validation_1.createPaymentSchema), (req, res, next) => payment_controller_1.paymentController.processPayment(req, res, next));
 exports.default = router;

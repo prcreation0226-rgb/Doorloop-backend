@@ -2,7 +2,9 @@ import prisma from '../config/database.js';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware.js';
 
 export async function getManagerCompanyId(req?: AuthenticatedRequest, explicitId?: string): Promise<string> {
-  if (explicitId && typeof explicitId === 'string' && explicitId.trim() !== '' && explicitId !== 'null') {
+  const isSuperAdmin = req?.user?.roleName === 'Super Admin' || (req?.user as any)?.role === 'Super Admin';
+
+  if (isSuperAdmin && explicitId && typeof explicitId === 'string' && explicitId.trim() !== '' && explicitId !== 'null') {
     return explicitId;
   }
 

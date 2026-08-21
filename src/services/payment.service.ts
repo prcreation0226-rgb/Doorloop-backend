@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { authorizeNetService } from './authorizeNet.service';
+import { AppError } from '../utils/appError';
 
 export class PaymentService {
   async getAllPayments(companyId?: string, user?: any) {
@@ -137,7 +138,16 @@ export class PaymentService {
       throw new Error('Cannot process payment: Valid Tenant, Property, Unit, and Lease are required.');
     }
 
+    const refNum = data.referenceNumber || `REF-${Date.now()}`;
+
     return prisma.$transaction(async (tx) => {
+      const existingPayment = await tx.rentPayment.findFirst({
+        where: { referenceNumber: refNum },
+      });
+      if (existingPayment) {
+        throw new AppError(`A payment with reference number "${refNum}" has already been processed.`, 400, 'DUPLICATE_PAYMENT');
+      }
+
       const payment = await tx.rentPayment.create({
         data: {
           tenantId: tenantId,
@@ -149,7 +159,7 @@ export class PaymentService {
           paidDate: new Date(data.paidDate || Date.now()),
           status: 'Paid',
           paymentMethod: data.paymentMethod || 'ACH',
-          referenceNumber: data.referenceNumber || `REF-${Date.now()}`,
+          referenceNumber: refNum,
           companyId: data.companyId || tenant?.companyId || property?.companyId,
         },
       });

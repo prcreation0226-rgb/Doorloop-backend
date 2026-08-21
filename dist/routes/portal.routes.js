@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const portal_controller_1 = require("../controllers/portal.controller");
 const upload_middleware_1 = require("../middlewares/upload.middleware");
+const validate_middleware_1 = require("../middlewares/validate.middleware");
+const crm_validation_1 = require("../validations/crm.validation");
 const router = (0, express_1.Router)();
 // Tenant Portal Views
 router.get('/tenant/leases', (req, res, next) => portal_controller_1.portalController.getTenantLeases(req, res, next));
@@ -42,7 +44,7 @@ router.get('/superadmin/audit', (req, res, next) => portal_controller_1.portalCo
 router.get('/collections/payment-plans', (req, res, next) => portal_controller_1.portalController.getCollectionPaymentPlans(req, res, next));
 router.post('/collections/payment-plans', (req, res, next) => portal_controller_1.portalController.createCollectionPaymentPlan(req, res, next));
 router.get('/crm/leads', (req, res, next) => portal_controller_1.portalController.getCrmLeads(req, res, next));
-router.post('/crm/leads', (req, res, next) => portal_controller_1.portalController.createCrmLead(req, res, next));
+router.post('/crm/leads', (0, validate_middleware_1.validateRequest)(crm_validation_1.createCrmLeadSchema), (req, res, next) => portal_controller_1.portalController.createCrmLead(req, res, next));
 router.get('/screening/reports', (req, res, next) => portal_controller_1.portalController.getScreeningReports(req, res, next));
 router.get('/screening/reports/:id', (req, res, next) => portal_controller_1.portalController.getScreeningReportById(req, res, next));
 router.post('/screening/reports', (req, res, next) => portal_controller_1.portalController.createScreeningReport(req, res, next));

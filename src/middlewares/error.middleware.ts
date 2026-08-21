@@ -23,6 +23,20 @@ export function errorHandler(
     });
   }
 
+  // Treat generic developer-thrown Error objects as operational 400 errors
+  if (err.name === 'Error' || (err as any).isOperational) {
+    logger.warn({ err, requestId }, `Operational Generic Error: ${err.message}`);
+    const statusCode = (err as any).statusCode || 400;
+    return sendError({
+      res,
+      statusCode,
+      message: err.message,
+      code: (err as any).code || 'BAD_REQUEST',
+      details: (err as any).details,
+      requestId,
+    });
+  }
+
   logger.error({ err, requestId }, `Unhandled Exception: ${err.message}`);
   return sendError({
     res,

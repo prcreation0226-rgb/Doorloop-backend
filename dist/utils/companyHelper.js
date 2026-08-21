@@ -7,7 +7,8 @@ exports.getManagerCompanyId = getManagerCompanyId;
 exports.autoHealMissingCompanyIds = autoHealMissingCompanyIds;
 const database_js_1 = __importDefault(require("../config/database.js"));
 async function getManagerCompanyId(req, explicitId) {
-    if (explicitId && typeof explicitId === 'string' && explicitId.trim() !== '' && explicitId !== 'null') {
+    const isSuperAdmin = req?.user?.roleName === 'Super Admin' || req?.user?.role === 'Super Admin';
+    if (isSuperAdmin && explicitId && typeof explicitId === 'string' && explicitId.trim() !== '' && explicitId !== 'null') {
         return explicitId;
     }
     if (req?.user?.companyId) {

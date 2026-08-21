@@ -8,6 +8,7 @@ const bcrypt_1 = __importDefault(require("bcrypt"));
 const database_1 = __importDefault(require("../config/database"));
 const companyHelper_1 = require("../utils/companyHelper");
 const authorizeNet_service_1 = require("./authorizeNet.service");
+const appError_1 = require("../utils/appError");
 class SuperAdminService {
     // Companies Directory
     async getCompanies() {
@@ -29,6 +30,26 @@ class SuperAdminService {
         });
     }
     async createCompany(data) {
+        // 0. Validate required input parameters
+        if (!data) {
+            throw new appError_1.AppError('Registration payload is required.', 400, 'VALIDATION_ERROR');
+        }
+        if (!data.name || typeof data.name !== 'string' || data.name.trim().length === 0) {
+            throw new appError_1.AppError('Company name is required.', 400, 'VALIDATION_ERROR');
+        }
+        if (!data.contactName || typeof data.contactName !== 'string' || data.contactName.trim().length === 0) {
+            throw new appError_1.AppError('Primary contact name is required.', 400, 'VALIDATION_ERROR');
+        }
+        if (!data.email || typeof data.email !== 'string' || data.email.trim().length === 0) {
+            throw new appError_1.AppError('Email address is required.', 400, 'VALIDATION_ERROR');
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(data.email.trim())) {
+            throw new appError_1.AppError('Invalid email format.', 400, 'VALIDATION_ERROR');
+        }
+        if (data.password && (typeof data.password !== 'string' || data.password.length < 6)) {
+            throw new appError_1.AppError('Password must be at least 6 characters.', 400, 'VALIDATION_ERROR');
+        }
         let code = data.code || data.name.substring(0, 4).toUpperCase().trim();
         if (!code || code.length < 2) {
             code = 'COMP';

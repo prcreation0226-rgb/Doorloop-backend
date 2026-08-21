@@ -50,14 +50,19 @@ class PropertyService {
         let ownerExists = false;
         if (ownerId) {
             try {
-                const owner = await database_1.default.owner.findUnique({
-                    where: { id: ownerId },
+                const owner = await database_1.default.owner.findFirst({
+                    where: companyId ? { id: ownerId, companyId } : { id: ownerId },
                 });
                 if (owner) {
                     ownerExists = true;
                 }
+                else {
+                    throw new appError_1.AppError('Owner not found or does not belong to your company.', 404, 'NOT_FOUND');
+                }
             }
             catch (e) {
+                if (e instanceof appError_1.AppError)
+                    throw e;
                 // ignore
             }
         }
@@ -144,11 +149,11 @@ class PropertyService {
             throw new appError_1.AppError('Property not found.', 404, 'NOT_FOUND');
         let ownerId = data.ownerId;
         if (ownerId) {
-            const owner = await database_1.default.owner.findUnique({
-                where: { id: ownerId },
+            const owner = await database_1.default.owner.findFirst({
+                where: companyId ? { id: ownerId, companyId } : { id: ownerId },
             });
             if (!owner) {
-                ownerId = prop.ownerId;
+                throw new appError_1.AppError('Owner not found or does not belong to your company.', 404, 'NOT_FOUND');
             }
         }
         else {

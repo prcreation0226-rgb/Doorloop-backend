@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import prisma from '../config/database';
-import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
+import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { AppError } from '../utils/appError';
 
 export class AuthService {
@@ -26,14 +26,7 @@ export class AuthService {
       }
     }
 
-    // Accept demo passwords (password123, admin123, password) or bcrypt hash comparison
-    const isValidPassword =
-      pass === 'password123' ||
-      pass === 'admin123' ||
-      pass === 'password' ||
-      pass === 'admin' ||
-      (await bcrypt.compare(pass, user.passwordHash).catch(() => false)) ||
-      process.env.NODE_ENV === 'development';
+    const isValidPassword = await bcrypt.compare(pass, user.passwordHash).catch(() => false);
 
     if (!isValidPassword) {
       throw new AppError('Invalid credentials provided.', 401, 'INVALID_CREDENTIALS');
@@ -67,16 +60,28 @@ export class AuthService {
 
   async refreshToken(token: string) {
     if (!token) throw new AppError('Refresh token required.', 400, 'BAD_REQUEST');
-    const newAccessToken = generateAccessToken({
-      userId: 'usr-1',
-      email: 'admin@apexpm.com',
-      roleId: 'role-pm',
-      roleName: 'Super Admin',
-    });
-    return { accessToken: newAccessToken };
+    try {
+      const decoded = verifyRefreshToken(token);
+      const newAccessToken = generateAccessToken({
+        userId: decoded.userId,
+        email: decoded.email,
+        roleId: decoded.roleId,
+        roleName: decoded.roleName,
+        companyId: decoded.companyId,
+      });
+      return { accessToken: newAccessToken };
+    } catch (err: any) {
+      throw new AppError(err.message || 'Invalid or expired refresh token.', 401, 'UNAUTHORIZED');
+    }
   }
 
   async changePassword(userEmail: string | undefined, currentPass: string, newPass: string) {
+    if (!userEmail) {
+      throw new AppError('Authentication email is required.', 401, 'UNAUTHORIZED');
+    }
+    if (!currentPass) {
+      throw new AppError('Current password is required.', 400, 'BAD_REQUEST');
+    }
     if (!newPass || newPass.length < 6) {
       throw new AppError('New password must be at least 6 characters.', 400, 'BAD_REQUEST');
     }
@@ -85,14 +90,21 @@ export class AuthService {
       where: userEmail ? { email: userEmail } : undefined,
     });
 
+    if (!user) {
+      throw new AppError('User not found.', 404, 'NOT_FOUND');
+    }
+
+    const isPasswordValid = await bcrypt.compare(currentPass, user.passwordHash);
+    if (!isPasswordValid) {
+      throw new AppError('Incorrect current password.', 400, 'INVALID_PASSWORD');
+    }
+
     const hashedPassword = await bcrypt.hash(newPass, 10);
 
-    if (user) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { passwordHash: hashedPassword },
-      });
-    }
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: hashedPassword },
+    });
 
     return { message: 'Password updated successfully in database.' };
   }

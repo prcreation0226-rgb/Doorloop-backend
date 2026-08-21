@@ -55,20 +55,31 @@ class UnitController {
             const { propertyId, buildingId, unitNumber, floor, bedrooms, bathrooms, squareFootage, rentAmount, securityDeposit, availabilityDate, status, } = req.body;
             const companyId = req.user?.companyId;
             let targetPropertyId = propertyId;
-            let property = targetPropertyId ? await database_1.default.property.findUnique({ where: { id: targetPropertyId } }) : null;
-            if (!property) {
+            let property = null;
+            if (targetPropertyId) {
+                property = await database_1.default.property.findFirst({
+                    where: companyId ? { id: targetPropertyId, companyId } : { id: targetPropertyId }
+                });
+                if (!property) {
+                    throw new appError_1.AppError('Property not found.', 404, 'NOT_FOUND');
+                }
+            }
+            else {
                 property = await database_1.default.property.findFirst({
                     where: companyId ? { companyId } : {},
                 });
-            }
-            if (!property) {
-                throw new Error('Please create a property before adding units.');
+                if (!property) {
+                    throw new appError_1.AppError('Please create a property before adding units.', 404, 'NOT_FOUND');
+                }
             }
             targetPropertyId = property.id;
             let finalBuildingId = buildingId;
             if (finalBuildingId) {
-                const existingBuilding = await database_1.default.building.findUnique({
-                    where: { id: finalBuildingId },
+                const existingBuilding = await database_1.default.building.findFirst({
+                    where: companyId ? {
+                        id: finalBuildingId,
+                        property: { companyId }
+                    } : { id: finalBuildingId },
                 });
                 if (!existingBuilding) {
                     finalBuildingId = undefined;
@@ -106,6 +117,16 @@ class UnitController {
                     }
                 }
             }
+            // Check if unit number already exists in this property
+            const existingUnit = await database_1.default.unit.findFirst({
+                where: {
+                    propertyId: targetPropertyId,
+                    unitNumber,
+                },
+            });
+            if (existingUnit) {
+                throw new appError_1.AppError(`Unit "${unitNumber}" already exists in this property.`, 400, 'DUPLICATE_UNIT');
+            }
             const unit = await database_1.default.unit.create({
                 data: {
                     propertyId: targetPropertyId,
@@ -140,7 +161,24 @@ class UnitController {
                     },
                 });
                 if (!check)
-                    throw new Error('Unit not found.');
+                    throw new appError_1.AppError('Unit not found.', 404, 'NOT_FOUND');
+            }
+            if (propertyId) {
+                const prop = await database_1.default.property.findFirst({
+                    where: companyId ? { id: propertyId, companyId } : { id: propertyId }
+                });
+                if (!prop)
+                    throw new appError_1.AppError('Property not found.', 404, 'NOT_FOUND');
+            }
+            if (buildingId) {
+                const build = await database_1.default.building.findFirst({
+                    where: companyId ? {
+                        id: buildingId,
+                        property: { companyId }
+                    } : { id: buildingId }
+                });
+                if (!build)
+                    throw new appError_1.AppError('Building not found.', 404, 'NOT_FOUND');
             }
             const unit = await database_1.default.unit.update({
                 where: { id },
@@ -176,7 +214,7 @@ class UnitController {
                     },
                 });
                 if (!check)
-                    throw new Error('Unit not found.');
+                    throw new appError_1.AppError('Unit not found.', 404, 'NOT_FOUND');
             }
             await database_1.default.unit.delete({
                 where: { id },
@@ -200,7 +238,14 @@ class UnitController {
                     },
                 });
                 if (!check)
-                    throw new Error('Unit not found.');
+                    throw new appError_1.AppError('Unit not found.', 404, 'NOT_FOUND');
+                if (tenantId) {
+                    const tenantCheck = await database_1.default.tenant.findFirst({
+                        where: { id: tenantId, companyId },
+                    });
+                    if (!tenantCheck)
+                        throw new appError_1.AppError('Tenant not found.', 404, 'NOT_FOUND');
+                }
             }
             const unit = await database_1.default.unit.update({
                 where: { id },

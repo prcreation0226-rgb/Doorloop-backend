@@ -65,21 +65,31 @@ export class UnitController {
       const companyId = req.user?.companyId;
 
       let targetPropertyId = propertyId;
-      let property = targetPropertyId ? await prisma.property.findUnique({ where: { id: targetPropertyId } }) : null;
-      if (!property) {
+      let property = null;
+      if (targetPropertyId) {
+        property = await prisma.property.findFirst({
+          where: companyId ? { id: targetPropertyId, companyId } : { id: targetPropertyId }
+        });
+        if (!property) {
+          throw new AppError('Property not found.', 404, 'NOT_FOUND');
+        }
+      } else {
         property = await prisma.property.findFirst({
           where: companyId ? { companyId } : {},
         });
-      }
-      if (!property) {
-        throw new Error('Please create a property before adding units.');
+        if (!property) {
+          throw new AppError('Please create a property before adding units.', 404, 'NOT_FOUND');
+        }
       }
       targetPropertyId = property.id;
 
       let finalBuildingId = buildingId;
       if (finalBuildingId) {
-        const existingBuilding = await prisma.building.findUnique({
-          where: { id: finalBuildingId },
+        const existingBuilding = await prisma.building.findFirst({
+          where: companyId ? {
+            id: finalBuildingId,
+            property: { companyId }
+          } : { id: finalBuildingId },
         });
         if (!existingBuilding) {
           finalBuildingId = undefined;
@@ -117,6 +127,17 @@ export class UnitController {
             throw new AppError(`Cannot add unit. The building has reached its maximum capacity of ${building.unitsCount} units.`, 400, 'BUILDING_CAPACITY_REACHED');
           }
         }
+      }
+
+      // Check if unit number already exists in this property
+      const existingUnit = await prisma.unit.findFirst({
+        where: {
+          propertyId: targetPropertyId,
+          unitNumber,
+        },
+      });
+      if (existingUnit) {
+        throw new AppError(`Unit "${unitNumber}" already exists in this property.`, 400, 'DUPLICATE_UNIT');
       }
 
       const unit = await prisma.unit.create({
@@ -165,7 +186,24 @@ export class UnitController {
             property: { companyId },
           },
         });
-        if (!check) throw new Error('Unit not found.');
+        if (!check) throw new AppError('Unit not found.', 404, 'NOT_FOUND');
+      }
+
+      if (propertyId) {
+        const prop = await prisma.property.findFirst({
+          where: companyId ? { id: propertyId, companyId } : { id: propertyId }
+        });
+        if (!prop) throw new AppError('Property not found.', 404, 'NOT_FOUND');
+      }
+
+      if (buildingId) {
+        const build = await prisma.building.findFirst({
+          where: companyId ? {
+            id: buildingId,
+            property: { companyId }
+          } : { id: buildingId }
+        });
+        if (!build) throw new AppError('Building not found.', 404, 'NOT_FOUND');
       }
 
       const unit = await prisma.unit.update({
@@ -202,7 +240,7 @@ export class UnitController {
             property: { companyId },
           },
         });
-        if (!check) throw new Error('Unit not found.');
+        if (!check) throw new AppError('Unit not found.', 404, 'NOT_FOUND');
       }
 
       await prisma.unit.delete({
@@ -227,7 +265,14 @@ export class UnitController {
             property: { companyId },
           },
         });
-        if (!check) throw new Error('Unit not found.');
+        if (!check) throw new AppError('Unit not found.', 404, 'NOT_FOUND');
+
+        if (tenantId) {
+          const tenantCheck = await prisma.tenant.findFirst({
+            where: { id: tenantId, companyId },
+          });
+          if (!tenantCheck) throw new AppError('Tenant not found.', 404, 'NOT_FOUND');
+        }
       }
 
       const unit = await prisma.unit.update({

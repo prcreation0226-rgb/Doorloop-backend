@@ -117,7 +117,7 @@ async function main() {
         });
     }
     // 3. Create Users matching frontend login credentials
-    const passwordHash = '$2b$12$KIX32Jc56M9s.Xg/7B9Aie1M5F1nBvKjD7zS3L0lYhXzQ/F5G7J1e'; // password: 'admin123'
+    const passwordHash = '$2b$12$OJZe0UwVTCpj0t6tfk0PNObncvFBfgPpCyXUYi5G0GVkWavbpyicy'; // password: 'admin123'
     await prisma.user.upsert({
         where: { email: 'admin@apexpm.com' },
         update: { roleId: adminRole.id },

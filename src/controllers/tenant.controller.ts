@@ -53,6 +53,15 @@ export class TenantController {
         }
       }
 
+      if (unitId && companyId) {
+        const unit = await prisma.unit.findFirst({
+          where: { id: unitId, property: { companyId } },
+        });
+        if (!unit) {
+          throw new AppError('Unit not found.', 404, 'NOT_FOUND');
+        }
+      }
+
       const tenant = await prisma.tenant.create({
         data: {
           firstName,
@@ -90,7 +99,10 @@ export class TenantController {
       }
 
       return sendSuccess({ res, statusCode: 201, data: tenant });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 'P2002' || error?.message?.includes('Unique constraint')) {
+        return next(new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL'));
+      }
       next(error);
     }
   }
@@ -124,10 +136,19 @@ export class TenantController {
       const id = req.params.id as string;
       const file = req.file;
 
-      const oldTenant = await prisma.tenant.findUnique({
-        where: { id },
+      const oldTenant = await prisma.tenant.findFirst({
+        where: companyId ? { id, companyId } : { id },
       });
       if (!oldTenant) throw new AppError('Tenant not found.', 404, 'NOT_FOUND');
+
+      if (unitId && companyId) {
+        const unit = await prisma.unit.findFirst({
+          where: { id: unitId, property: { companyId } },
+        });
+        if (!unit) {
+          throw new AppError('Unit not found.', 404, 'NOT_FOUND');
+        }
+      }
 
       let imageUrl = oldTenant.imageUrl;
       if (file) {
@@ -201,7 +222,10 @@ export class TenantController {
       }
 
       return sendSuccess({ res, data: tenant });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 'P2002' || error?.message?.includes('Unique constraint')) {
+        return next(new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL'));
+      }
       next(error);
     }
   }

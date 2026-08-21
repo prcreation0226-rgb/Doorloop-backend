@@ -2,9 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const lease_controller_1 = require("../controllers/lease.controller");
+const validate_middleware_1 = require("../middlewares/validate.middleware");
+const lease_validation_1 = require("../validations/lease.validation");
 const router = (0, express_1.Router)();
 router.get('/', (req, res, next) => lease_controller_1.leaseController.getAll(req, res, next));
-router.post('/', (req, res, next) => lease_controller_1.leaseController.create(req, res, next));
-router.put('/:id', (req, res, next) => lease_controller_1.leaseController.update(req, res, next));
+router.post('/', (0, validate_middleware_1.validateRequest)(lease_validation_1.createLeaseSchema), (req, res, next) => lease_controller_1.leaseController.create(req, res, next));
+router.put('/:id', (0, validate_middleware_1.validateRequest)(lease_validation_1.updateLeaseSchema), (req, res, next) => lease_controller_1.leaseController.update(req, res, next));
 router.delete('/:id', (req, res, next) => lease_controller_1.leaseController.delete(req, res, next));
 exports.default = router;

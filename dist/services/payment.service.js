@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.paymentService = exports.PaymentService = void 0;
 const database_1 = __importDefault(require("../config/database"));
+const appError_1 = require("../utils/appError");
 class PaymentService {
     async getAllPayments(companyId, user) {
         let whereClause = companyId ? { companyId } : {};
@@ -133,7 +134,14 @@ class PaymentService {
         if (!leaseId || !propertyId || !unitId || !tenantId) {
             throw new Error('Cannot process payment: Valid Tenant, Property, Unit, and Lease are required.');
         }
+        const refNum = data.referenceNumber || `REF-${Date.now()}`;
         return database_1.default.$transaction(async (tx) => {
+            const existingPayment = await tx.rentPayment.findFirst({
+                where: { referenceNumber: refNum },
+            });
+            if (existingPayment) {
+                throw new appError_1.AppError(`A payment with reference number "${refNum}" has already been processed.`, 400, 'DUPLICATE_PAYMENT');
+            }
             const payment = await tx.rentPayment.create({
                 data: {
                     tenantId: tenantId,
@@ -145,7 +153,7 @@ class PaymentService {
                     paidDate: new Date(data.paidDate || Date.now()),
                     status: 'Paid',
                     paymentMethod: data.paymentMethod || 'ACH',
-                    referenceNumber: data.referenceNumber || `REF-${Date.now()}`,
+                    referenceNumber: refNum,
                     companyId: data.companyId || tenant?.companyId || property?.companyId,
                 },
             });

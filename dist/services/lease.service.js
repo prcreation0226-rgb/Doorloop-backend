@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.leaseService = exports.LeaseService = void 0;
 const database_1 = __importDefault(require("../config/database"));
 const auditHelper_1 = require("../utils/auditHelper");
+const appError_1 = require("../utils/appError");
 class LeaseService {
     async getAllLeases(companyId) {
         return database_1.default.lease.findMany({
@@ -61,7 +62,7 @@ class LeaseService {
             where: { id, ...(companyId ? { companyId } : {}) },
         });
         if (!lease)
-            throw new Error('Lease not found.');
+            throw new appError_1.AppError('Lease not found.', 404, 'NOT_FOUND');
         return database_1.default.$transaction(async (tx) => {
             const updatedLease = await tx.lease.update({
                 where: { id },
@@ -97,7 +98,7 @@ class LeaseService {
                 where: { id, companyId },
             });
             if (!lease)
-                throw new Error('Lease not found.');
+                throw new appError_1.AppError('Lease not found.', 404, 'NOT_FOUND');
         }
         return database_1.default.lease.delete({
             where: { id },

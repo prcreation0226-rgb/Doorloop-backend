@@ -53,6 +53,14 @@ class TenantController {
                     console.error('Cloudinary tenant photo upload failed:', err);
                 }
             }
+            if (unitId && companyId) {
+                const unit = await database_js_1.default.unit.findFirst({
+                    where: { id: unitId, property: { companyId } },
+                });
+                if (!unit) {
+                    throw new appError_js_1.AppError('Unit not found.', 404, 'NOT_FOUND');
+                }
+            }
             const tenant = await database_js_1.default.tenant.create({
                 data: {
                     firstName,
@@ -90,6 +98,9 @@ class TenantController {
             return (0, apiResponse_js_1.sendSuccess)({ res, statusCode: 201, data: tenant });
         }
         catch (error) {
+            if (error?.code === 'P2002' || error?.message?.includes('Unique constraint')) {
+                return next(new appError_js_1.AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL'));
+            }
             next(error);
         }
     }
@@ -122,11 +133,19 @@ class TenantController {
             const companyId = req.user?.companyId;
             const id = req.params.id;
             const file = req.file;
-            const oldTenant = await database_js_1.default.tenant.findUnique({
-                where: { id },
+            const oldTenant = await database_js_1.default.tenant.findFirst({
+                where: companyId ? { id, companyId } : { id },
             });
             if (!oldTenant)
                 throw new appError_js_1.AppError('Tenant not found.', 404, 'NOT_FOUND');
+            if (unitId && companyId) {
+                const unit = await database_js_1.default.unit.findFirst({
+                    where: { id: unitId, property: { companyId } },
+                });
+                if (!unit) {
+                    throw new appError_js_1.AppError('Unit not found.', 404, 'NOT_FOUND');
+                }
+            }
             let imageUrl = oldTenant.imageUrl;
             if (file) {
                 try {
@@ -197,6 +216,9 @@ class TenantController {
             return (0, apiResponse_js_1.sendSuccess)({ res, data: tenant });
         }
         catch (error) {
+            if (error?.code === 'P2002' || error?.message?.includes('Unique constraint')) {
+                return next(new appError_js_1.AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL'));
+            }
             next(error);
         }
     }

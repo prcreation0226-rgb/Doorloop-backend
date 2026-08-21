@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { getValidUserId } from '../utils/auditHelper';
+import { AppError } from '../utils/appError';
 
 export class LeaseService {
   async getAllLeases(companyId?: string) {
@@ -60,7 +61,7 @@ export class LeaseService {
     const lease = await prisma.lease.findFirst({
       where: { id, ...(companyId ? { companyId } : {}) },
     });
-    if (!lease) throw new Error('Lease not found.');
+    if (!lease) throw new AppError('Lease not found.', 404, 'NOT_FOUND');
 
     return prisma.$transaction(async (tx) => {
       const updatedLease = await tx.lease.update({
@@ -99,7 +100,7 @@ export class LeaseService {
       const lease = await prisma.lease.findFirst({
         where: { id, companyId },
       });
-      if (!lease) throw new Error('Lease not found.');
+      if (!lease) throw new AppError('Lease not found.', 404, 'NOT_FOUND');
     }
     return prisma.lease.delete({
       where: { id },

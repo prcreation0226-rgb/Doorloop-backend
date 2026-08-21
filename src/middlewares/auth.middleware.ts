@@ -14,27 +14,15 @@ export async function authMiddleware(req: AuthenticatedRequest, res: Response, n
   let payload: TokenPayload;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    payload = {
-      userId: 'usr-1',
-      email: 'diya.jain@whatslandlord.com',
-      roleId: 'role-cm',
-      roleName: 'Collection Manager',
-    };
+    return next(new AppError('Authentication credentials (Bearer token) are missing or invalid.', 401, 'UNAUTHORIZED'));
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    payload = verifyAccessToken(token);
     req.user = payload;
-  } else {
-    const token = authHeader.split(' ')[1];
-    try {
-      payload = verifyAccessToken(token);
-      req.user = payload;
-    } catch (error) {
-      payload = {
-        userId: 'usr-1',
-        email: 'diya.jain@whatslandlord.com',
-        roleId: 'role-cm',
-        roleName: 'Collection Manager',
-      };
-      req.user = payload;
-    }
+  } catch (error: any) {
+    return next(new AppError(error.message || 'Authentication token is invalid or expired.', 401, 'UNAUTHORIZED'));
   }
 
   try {

@@ -25,13 +25,7 @@ class AuthService {
                 throw new appError_1.AppError('Your company account is suspended. Please contact support.', 403, 'COMPANY_SUSPENDED');
             }
         }
-        // Accept demo passwords (password123, admin123, password) or bcrypt hash comparison
-        const isValidPassword = pass === 'password123' ||
-            pass === 'admin123' ||
-            pass === 'password' ||
-            pass === 'admin' ||
-            (await bcrypt_1.default.compare(pass, user.passwordHash).catch(() => false)) ||
-            process.env.NODE_ENV === 'development';
+        const isValidPassword = await bcrypt_1.default.compare(pass, user.passwordHash).catch(() => false);
         if (!isValidPassword) {
             throw new appError_1.AppError('Invalid credentials provided.', 401, 'INVALID_CREDENTIALS');
         }
@@ -61,28 +55,46 @@ class AuthService {
     async refreshToken(token) {
         if (!token)
             throw new appError_1.AppError('Refresh token required.', 400, 'BAD_REQUEST');
-        const newAccessToken = (0, jwt_1.generateAccessToken)({
-            userId: 'usr-1',
-            email: 'admin@apexpm.com',
-            roleId: 'role-pm',
-            roleName: 'Super Admin',
-        });
-        return { accessToken: newAccessToken };
+        try {
+            const decoded = (0, jwt_1.verifyRefreshToken)(token);
+            const newAccessToken = (0, jwt_1.generateAccessToken)({
+                userId: decoded.userId,
+                email: decoded.email,
+                roleId: decoded.roleId,
+                roleName: decoded.roleName,
+                companyId: decoded.companyId,
+            });
+            return { accessToken: newAccessToken };
+        }
+        catch (err) {
+            throw new appError_1.AppError(err.message || 'Invalid or expired refresh token.', 401, 'UNAUTHORIZED');
+        }
     }
     async changePassword(userEmail, currentPass, newPass) {
+        if (!userEmail) {
+            throw new appError_1.AppError('Authentication email is required.', 401, 'UNAUTHORIZED');
+        }
+        if (!currentPass) {
+            throw new appError_1.AppError('Current password is required.', 400, 'BAD_REQUEST');
+        }
         if (!newPass || newPass.length < 6) {
             throw new appError_1.AppError('New password must be at least 6 characters.', 400, 'BAD_REQUEST');
         }
         const user = await database_1.default.user.findFirst({
             where: userEmail ? { email: userEmail } : undefined,
         });
-        const hashedPassword = await bcrypt_1.default.hash(newPass, 10);
-        if (user) {
-            await database_1.default.user.update({
-                where: { id: user.id },
-                data: { passwordHash: hashedPassword },
-            });
+        if (!user) {
+            throw new appError_1.AppError('User not found.', 404, 'NOT_FOUND');
         }
+        const isPasswordValid = await bcrypt_1.default.compare(currentPass, user.passwordHash);
+        if (!isPasswordValid) {
+            throw new appError_1.AppError('Incorrect current password.', 400, 'INVALID_PASSWORD');
+        }
+        const hashedPassword = await bcrypt_1.default.hash(newPass, 10);
+        await database_1.default.user.update({
+            where: { id: user.id },
+            data: { passwordHash: hashedPassword },
+        });
         return { message: 'Password updated successfully in database.' };
     }
 }

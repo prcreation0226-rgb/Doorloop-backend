@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { portalController } from '../controllers/portal.controller';
 import { uploadScreeningReportDoc } from '../middlewares/upload.middleware';
+import { validateRequest } from '../middlewares/validate.middleware';
+import { createCrmLeadSchema } from '../validations/crm.validation';
 
 const router = Router();
 
@@ -46,7 +48,7 @@ router.get('/collections/payment-plans', (req, res, next) => portalController.ge
 router.post('/collections/payment-plans', (req, res, next) => portalController.createCollectionPaymentPlan(req, res, next));
 
 router.get('/crm/leads', (req, res, next) => portalController.getCrmLeads(req, res, next));
-router.post('/crm/leads', (req, res, next) => portalController.createCrmLead(req, res, next));
+router.post('/crm/leads', validateRequest(createCrmLeadSchema), (req, res, next) => portalController.createCrmLead(req, res, next));
 
 router.get('/screening/reports', (req, res, next) => portalController.getScreeningReports(req, res, next));
 router.get('/screening/reports/:id', (req, res, next) => portalController.getScreeningReportById(req, res, next));
