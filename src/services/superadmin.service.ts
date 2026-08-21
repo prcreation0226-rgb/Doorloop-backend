@@ -63,6 +63,16 @@ export class SuperAdminService {
       throw new AppError('Password must be at least 6 characters.', 400, 'VALIDATION_ERROR');
     }
 
+    const existingUser = await prisma.user.findFirst({ where: { email: data.email.trim().toLowerCase() } });
+    if (existingUser) {
+      throw new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+    }
+
+    const existingCompany = await prisma.company.findFirst({ where: { email: data.email.trim().toLowerCase() } });
+    if (existingCompany) {
+      throw new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+    }
+
     let code = data.code || data.name.substring(0, 4).toUpperCase().trim();
     if (!code || code.length < 2) {
       code = 'COMP';
