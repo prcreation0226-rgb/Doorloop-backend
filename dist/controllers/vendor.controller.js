@@ -8,6 +8,7 @@ const database_1 = __importDefault(require("../config/database"));
 const apiResponse_1 = require("../utils/apiResponse");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const companyHelper_1 = require("../utils/companyHelper");
+const appError_1 = require("../utils/appError");
 class VendorController {
     async getAll(req, res, next) {
         try {
@@ -43,6 +44,16 @@ class VendorController {
         try {
             const { companyName, contactName, email, phone, serviceType, rating, password } = req.body;
             const companyId = await (0, companyHelper_1.getManagerCompanyId)(req, req.body.companyId || req.user?.companyId);
+            if (email) {
+                const existingUser = await database_1.default.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+                if (existingUser) {
+                    throw new appError_1.AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+                }
+                const existingVendor = await database_1.default.vendor.findFirst({ where: { email: email.trim().toLowerCase() } });
+                if (existingVendor) {
+                    throw new appError_1.AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+                }
+            }
             const vendor = await database_1.default.vendor.create({
                 data: {
                     companyName,
@@ -60,37 +71,29 @@ class VendorController {
                     where: { name: 'Maintenance Staff' },
                 });
                 if (roleObj) {
-                    const existingUser = await database_1.default.user.findUnique({
-                        where: { email },
+                    const passwordHash = await bcrypt_1.default.hash(password || 'vendor123', 12);
+                    const nameParts = (contactName || companyName || 'Vendor').trim().split(/\s+/);
+                    const firstName = nameParts[0] || 'Vendor';
+                    const lastName = nameParts.slice(1).join(' ') || 'Partner';
+                    await database_1.default.user.create({
+                        data: {
+                            email,
+                            passwordHash,
+                            firstName,
+                            lastName,
+                            phone: phone || '',
+                            roleId: roleObj.id,
+                            companyId,
+                        },
                     });
-                    if (!existingUser) {
-                        const passwordHash = await bcrypt_1.default.hash(password || 'vendor123', 12);
-                        const nameParts = (contactName || companyName || 'Vendor').trim().split(/\s+/);
-                        const firstName = nameParts[0] || 'Vendor';
-                        const lastName = nameParts.slice(1).join(' ') || 'Partner';
-                        await database_1.default.user.create({
-                            data: {
-                                email,
-                                passwordHash,
-                                firstName,
-                                lastName,
-                                phone: phone || '',
-                                roleId: roleObj.id,
-                                companyId,
-                            },
-                        });
-                    }
-                    else if (!existingUser.companyId) {
-                        await database_1.default.user.update({
-                            where: { id: existingUser.id },
-                            data: { companyId },
-                        });
-                    }
                 }
             }
             return (0, apiResponse_1.sendSuccess)({ res, statusCode: 201, data: vendor });
         }
         catch (error) {
+            if (error?.code === 'P2002' || error?.message?.includes('Unique constraint')) {
+                return next(new appError_1.AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL'));
+            }
             next(error);
         }
     }
@@ -113,6 +116,9 @@ class VendorController {
             return (0, apiResponse_1.sendSuccess)({ res, data: vendor });
         }
         catch (error) {
+            if (error?.code === 'P2002' || error?.message?.includes('Unique constraint')) {
+                return next(new appError_1.AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL'));
+            }
             next(error);
         }
     }

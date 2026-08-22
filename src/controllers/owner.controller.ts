@@ -4,6 +4,7 @@ import { sendSuccess } from '../utils/apiResponse.js';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware.js';
 import bcrypt from 'bcrypt';
 import { getManagerCompanyId } from '../utils/companyHelper.js';
+import { AppError } from '../utils/appError.js';
 
 export class OwnerController {
   async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -26,6 +27,19 @@ export class OwnerController {
       const { name, firstName, lastName, email, phone, payoutMethod, password, propertiesOwned } = req.body;
       const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
       const companyId = await getManagerCompanyId(req, req.body.companyId || req.user?.companyId);
+
+      if (email) {
+        const existingUser = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+        if (existingUser) {
+          throw new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+        }
+
+        const existingOwner = await prisma.owner.findUnique({ where: { email: email.trim().toLowerCase() } });
+        if (existingOwner) {
+          throw new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+        }
+      }
+
       const owner = await prisma.owner.create({
         data: {
           name: resolvedName,
@@ -69,7 +83,10 @@ export class OwnerController {
       }
 
       return sendSuccess({ res, statusCode: 201, data: owner });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 'P2002' || error?.message?.includes('Unique constraint')) {
+        return next(new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL'));
+      }
       next(error);
     }
   }
@@ -148,7 +165,10 @@ export class OwnerController {
       }
 
       return sendSuccess({ res, data: owner });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 'P2002' || error?.message?.includes('Unique constraint')) {
+        return next(new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL'));
+      }
       next(error);
     }
   }

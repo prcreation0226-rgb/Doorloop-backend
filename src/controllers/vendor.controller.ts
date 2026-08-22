@@ -4,6 +4,7 @@ import { sendSuccess } from '../utils/apiResponse';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import bcrypt from 'bcrypt';
 import { getManagerCompanyId } from '../utils/companyHelper';
+import { AppError } from '../utils/appError';
 
 export class VendorController {
   async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -43,7 +44,18 @@ export class VendorController {
     try {
       const { companyName, contactName, email, phone, serviceType, rating, password } = req.body;
       const companyId = await getManagerCompanyId(req, req.body.companyId || req.user?.companyId);
-      
+      if (email) {
+        const existingUser = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+        if (existingUser) {
+          throw new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+        }
+
+        const existingVendor = await prisma.vendor.findFirst({ where: { email: email.trim().toLowerCase() } });
+        if (existingVendor) {
+          throw new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+        }
+      }
+
       const vendor = await prisma.vendor.create({
         data: {
           companyName,
@@ -63,37 +75,29 @@ export class VendorController {
         });
 
         if (roleObj) {
-          const existingUser = await prisma.user.findUnique({
-            where: { email },
+          const passwordHash = await bcrypt.hash(password || 'vendor123', 12);
+          const nameParts = (contactName || companyName || 'Vendor').trim().split(/\s+/);
+          const firstName = nameParts[0] || 'Vendor';
+          const lastName = nameParts.slice(1).join(' ') || 'Partner';
+
+          await prisma.user.create({
+            data: {
+              email,
+              passwordHash,
+              firstName,
+              lastName,
+              phone: phone || '',
+              roleId: roleObj.id,
+              companyId,
+            },
           });
-
-          if (!existingUser) {
-            const passwordHash = await bcrypt.hash(password || 'vendor123', 12);
-            const nameParts = (contactName || companyName || 'Vendor').trim().split(/\s+/);
-            const firstName = nameParts[0] || 'Vendor';
-            const lastName = nameParts.slice(1).join(' ') || 'Partner';
-
-            await prisma.user.create({
-              data: {
-                email,
-                passwordHash,
-                firstName,
-                lastName,
-                phone: phone || '',
-                roleId: roleObj.id,
-                companyId,
-              },
-            });
-          } else if (!existingUser.companyId) {
-            await prisma.user.update({
-              where: { id: existingUser.id },
-              data: { companyId },
-            });
-          }
         }
       }
       return sendSuccess({ res, statusCode: 201, data: vendor });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 'P2002' || error?.message?.includes('Unique constraint')) {
+        return next(new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL'));
+      }
       next(error);
     }
   }
@@ -116,7 +120,10 @@ export class VendorController {
         data: { companyName, contactName, email, phone, serviceType, rating },
       });
       return sendSuccess({ res, data: vendor });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 'P2002' || error?.message?.includes('Unique constraint')) {
+        return next(new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL'));
+      }
       next(error);
     }
   }

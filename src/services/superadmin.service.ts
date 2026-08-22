@@ -371,6 +371,16 @@ export class SuperAdminService {
   async createCompanyUser(data: { companyId?: string; name: string; email: string; role?: string; phone?: string; password?: string; serviceType?: string }) {
     let finalCompanyId = await getManagerCompanyId(undefined, data.companyId);
 
+    const existingUser = await prisma.user.findFirst({ where: { email: data.email.trim().toLowerCase() } });
+    if (existingUser) {
+      throw new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+    }
+
+    const existingCompanyUser = await prisma.companyUser.findFirst({ where: { email: data.email.trim().toLowerCase() } });
+    if (existingCompanyUser) {
+      throw new AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+    }
+
     // Map user-facing "Maintenance" role to "Maintenance Staff"
     let mappedRole = data.role || 'Property Manager';
     if (mappedRole === 'Maintenance') {

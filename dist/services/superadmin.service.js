@@ -323,6 +323,14 @@ class SuperAdminService {
     }
     async createCompanyUser(data) {
         let finalCompanyId = await (0, companyHelper_1.getManagerCompanyId)(undefined, data.companyId);
+        const existingUser = await database_1.default.user.findFirst({ where: { email: data.email.trim().toLowerCase() } });
+        if (existingUser) {
+            throw new appError_1.AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+        }
+        const existingCompanyUser = await database_1.default.companyUser.findFirst({ where: { email: data.email.trim().toLowerCase() } });
+        if (existingCompanyUser) {
+            throw new appError_1.AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+        }
         // Map user-facing "Maintenance" role to "Maintenance Staff"
         let mappedRole = data.role || 'Property Manager';
         if (mappedRole === 'Maintenance') {

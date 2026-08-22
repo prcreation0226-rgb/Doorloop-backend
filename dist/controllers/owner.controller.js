@@ -8,6 +8,7 @@ const database_js_1 = __importDefault(require("../config/database.js"));
 const apiResponse_js_1 = require("../utils/apiResponse.js");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const companyHelper_js_1 = require("../utils/companyHelper.js");
+const appError_js_1 = require("../utils/appError.js");
 class OwnerController {
     async getAll(req, res, next) {
         try {
@@ -29,6 +30,16 @@ class OwnerController {
             const { name, firstName, lastName, email, phone, payoutMethod, password, propertiesOwned } = req.body;
             const resolvedName = name || `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown';
             const companyId = await (0, companyHelper_js_1.getManagerCompanyId)(req, req.body.companyId || req.user?.companyId);
+            if (email) {
+                const existingUser = await database_js_1.default.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+                if (existingUser) {
+                    throw new appError_js_1.AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+                }
+                const existingOwner = await database_js_1.default.owner.findUnique({ where: { email: email.trim().toLowerCase() } });
+                if (existingOwner) {
+                    throw new appError_js_1.AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL');
+                }
+            }
             const owner = await database_js_1.default.owner.create({
                 data: {
                     name: resolvedName,
@@ -71,6 +82,9 @@ class OwnerController {
             return (0, apiResponse_js_1.sendSuccess)({ res, statusCode: 201, data: owner });
         }
         catch (error) {
+            if (error?.code === 'P2002' || error?.message?.includes('Unique constraint')) {
+                return next(new appError_js_1.AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL'));
+            }
             next(error);
         }
     }
@@ -144,6 +158,9 @@ class OwnerController {
             return (0, apiResponse_js_1.sendSuccess)({ res, data: owner });
         }
         catch (error) {
+            if (error?.code === 'P2002' || error?.message?.includes('Unique constraint')) {
+                return next(new appError_js_1.AppError('Email address is already registered.', 400, 'DUPLICATE_EMAIL'));
+            }
             next(error);
         }
     }
