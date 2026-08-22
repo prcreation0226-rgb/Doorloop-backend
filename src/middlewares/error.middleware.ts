@@ -11,6 +11,33 @@ export function errorHandler(
 ) {
   const requestId = (req.headers['x-request-id'] as string) || '';
 
+  const errMsg = err.message || '';
+  const lowerMsg = errMsg.toLowerCase();
+
+  // Intercept Prisma and DB unique constraint errors and translate to clean messages
+  if (
+    lowerMsg.includes('unique constraint failed') || 
+    lowerMsg.includes('email_key') || 
+    lowerMsg.includes('code_key') ||
+    (err as any).code === 'P2002'
+  ) {
+    let cleanMessage = 'A record with duplicate unique fields already exists.';
+    if (lowerMsg.includes('email')) {
+      cleanMessage = 'Email address is already registered.';
+    } else if (lowerMsg.includes('code_key') || lowerMsg.includes('code')) {
+      cleanMessage = 'Company code is already taken.';
+    }
+
+    logger.warn({ err, requestId }, `Unique Constraint Error Transformed: ${cleanMessage}`);
+    return sendError({
+      res,
+      statusCode: 400,
+      message: cleanMessage,
+      code: 'DUPLICATE_ENTRY',
+      requestId,
+    });
+  }
+
   if (err instanceof AppError) {
     logger.warn({ err, requestId }, `Operational Error: ${err.message}`);
     return sendError({
